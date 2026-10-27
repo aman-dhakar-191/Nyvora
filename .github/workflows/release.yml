@@ -1,0 +1,43 @@
+name: Release
+
+# Publishes a development release when a version tag (v*) is pushed, or on manual run with a tag name.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create/release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write # needed to create the GitHub release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test tests/Nyvora.Tests/Nyvora.Tests.csproj -c Release
+
+      - name: Publish (win-x64, self-contained)
+        run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 -p:Platform=x64 -o artifacts/Nyvora-win-x64
+
+      - name: Zip
+        run: Compress-Archive -Path artifacts/Nyvora-win-x64/* -DestinationPath "Nyvora-$env:TAG-win-x64.zip"
+        shell: pwsh
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:TAG" "Nyvora-$env:TAG-win-x64.zip" --title "Nyvora $env:TAG" --generate-notes --prerelease --target "$env:GITHUB_SHA"
