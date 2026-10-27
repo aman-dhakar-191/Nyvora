@@ -1,9 +1,10 @@
 <Window
     x:Class="Nyvora.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:Nyvora.App.UI">
 
-    <Grid x:Name="Root" Background="#FF0B0B10" Tapped="OnRootTapped" IsTabStop="True">
+    <Grid x:Name="Root" Background="#FF0B0B10">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="Escape" Invoked="OnEscape" />
         </Grid.KeyboardAccelerators>
@@ -13,45 +14,21 @@
             </MenuFlyout>
         </Grid.ContextFlyout>
 
+        <!-- Expanded content: fixed width so it never reflows while the window grows. -->
+        <ui:TasksPanel x:Name="Panel" Width="420" Height="380" HorizontalAlignment="Center"
+                       VerticalAlignment="Top" Opacity="0" IsHitTestVisible="False" />
+
+        <!-- Resting content: covers the whole pill, shows the hand cursor, and expands on tap. -->
+        <ui:HandGrid x:Name="RestingContent" Background="Transparent" Tapped="OnRestingTapped">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                        VerticalAlignment="Center" IsHitTestVisible="False">
+                <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#FF5EEAD4" VerticalAlignment="Center" />
+                <TextBlock x:Name="RestingLabel" Text="Nyvora" FontSize="13" FontWeight="SemiBold"
+                           Foreground="#FFE7E7EE" />
+            </StackPanel>
+        </ui:HandGrid>
+
         <!-- Subtle 1px edge; rounded clipping comes from the window region. -->
         <Border BorderBrush="#33FFFFFF" BorderThickness="1" IsHitTestVisible="False" />
-
-        <!-- Resting content -->
-        <StackPanel x:Name="RestingContent" Orientation="Horizontal" Spacing="8"
-                    HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,10,0,0">
-            <Ellipse Width="8" Height="8" Fill="#FF5EEAD4" VerticalAlignment="Center" />
-            <TextBlock Text="Nyvora" FontSize="13" FontWeight="SemiBold" Foreground="#FFE7E7EE" />
-        </StackPanel>
-
-        <!-- Expanded content: fixed width so it never reflows while the window grows. -->
-        <Grid x:Name="ExpandedContent" Width="420" HorizontalAlignment="Center" VerticalAlignment="Top"
-              Padding="24,20,24,16" RowSpacing="12" Opacity="0" IsHitTestVisible="False">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <Ellipse Width="10" Height="10" Fill="#FF5EEAD4" VerticalAlignment="Center" />
-                <TextBlock Text="Nyvora" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
-            </StackPanel>
-
-            <TextBlock Grid.Row="1" Text="Your desktop companion. Placeholder content for the first milestone."
-                       FontSize="13" Foreground="#FF9A9AB0" TextWrapping="Wrap" />
-
-            <Grid Grid.Row="2" ColumnSpacing="8" VerticalAlignment="Bottom">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Border CornerRadius="10" Background="#1AFFFFFF" Padding="12,8">
-                    <TextBlock Text="Esc or click away to collapse" FontSize="12" Foreground="#FFB8B8CC" />
-                </Border>
-                <Button Grid.Column="1" Content="Collapse" Click="OnCollapseClick" />
-                <Button Grid.Column="2" Content="Quit" Click="OnQuit" />
-            </Grid>
-        </Grid>
     </Grid>
 </Window>

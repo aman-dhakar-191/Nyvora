@@ -70,7 +70,35 @@ internal sealed class PillWindowHost : IDisposable
         SetWindowLongPtr(_hwnd, GWL_EXSTYLE, (nint)ex);
     }
 
-    public void Activate() => _window.Activate();
+    /// <summary>Gives the pill real keyboard focus (needed for typing); only call for user-initiated interaction.</summary>
+    public void Focus()
+    {
+        SetNoActivate(false);
+        _window.Activate();
+        SetForegroundWindow(_hwnd);
+    }
+
+    private bool _buttonWasDown;
+
+    /// <summary>
+    /// True once per mouse-button press that lands outside the pill. Polled instead of relying on
+    /// Deactivated, which never fires for a window that was shown without activation or whose
+    /// click-away target does not take foreground (e.g. the desktop or another topmost window).
+    /// </summary>
+    public bool PollClickOutside()
+    {
+        var down = ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000) != 0;
+        var pressed = down && !_buttonWasDown;
+        _buttonWasDown = down;
+        if (!pressed || !GetCursorPos(out var p) || !GetWindowRect(_hwnd, out var r))
+        {
+            return false;
+        }
+
+        return p.X < r.Left || p.X >= r.Right || p.Y < r.Top || p.Y >= r.Bottom;
+    }
+
+    public void ResetClickTracking() => _buttonWasDown = true; // ignore a press already in progress
 
     /// <summary>Resizes (in DIPs) around the top-center anchor and re-clips to a rounded shape.</summary>
     public void Apply(SizeD sizeDip)

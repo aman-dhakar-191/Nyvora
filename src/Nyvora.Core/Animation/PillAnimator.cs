@@ -9,7 +9,7 @@ public readonly record struct SizeD(double Width, double Height);
 public sealed class PillAnimator
 {
     public static readonly SizeD RestingSize = new(148, 36);
-    public static readonly SizeD ExpandedSize = new(420, 176);
+    public static readonly SizeD ExpandedSize = new(420, 380);
 
     public static readonly TimeSpan ExpandDuration = TimeSpan.FromMilliseconds(320);
     public static readonly TimeSpan CollapseDuration = TimeSpan.FromMilliseconds(240);
