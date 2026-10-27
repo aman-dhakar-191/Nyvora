@@ -1,0 +1,39 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore Nyvora.sln -p:Platform=x64
+
+      - name: Build (Release)
+        run: dotnet build Nyvora.sln -c Release -p:Platform=x64 --no-restore
+
+      - name: Test
+        run: dotnet test tests/Nyvora.Tests/Nyvora.Tests.csproj -c Release --no-restore
+
+      - name: Publish app (development artifact)
+        run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 -p:Platform=x64 -o artifacts/Nyvora-win-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nyvora-win-x64-dev
+          path: artifacts/Nyvora-win-x64
+          if-no-files-found: error
