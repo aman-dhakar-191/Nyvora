@@ -67,6 +67,6 @@
             <ui:HandButton Grid.Column="2" Content="Quit" Click="OnQuit" />
         </Grid>
     </Grid>
-    <ui:StatusSettingsView x:Name="Settings" Visibility="Collapsed" BackRequested="OnSettingsBack" />
+    <ui:StatusSettingsView x:Name="Settings" Visibility="Collapsed" BackRequested="OnSettingsBack" StatusReminderChanged="OnStatusReminderChanged" />
     </Grid>
 </UserControl>

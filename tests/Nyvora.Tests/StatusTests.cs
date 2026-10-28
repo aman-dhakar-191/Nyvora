@@ -260,3 +260,58 @@ public class StatusSetTests
         Assert.Equal(0, list.DueCount(Now.AddHours(1)));
     }
 }
+
+public class RecurringNudgeTests
+{
+    private static readonly DateTimeOffset T0 = new(2026, 3, 10, 9, 0, 0, TimeSpan.Zero);
+    private static readonly TimeSpan Hour = TimeSpan.FromHours(1);
+
+    [Fact]
+    public void DoesNotFireBeforeTheIntervalAndFiresOncePerInterval()
+    {
+        var n = new RecurringNudge(Hour, T0);
+        Assert.False(n.TryFire(T0, 3));
+        Assert.False(n.TryFire(T0.AddMinutes(59), 3));
+        Assert.True(n.TryFire(T0.AddMinutes(60), 3));
+        Assert.False(n.TryFire(T0.AddMinutes(61), 3));
+        Assert.True(n.TryFire(T0.AddMinutes(120), 3));
+    }
+
+    [Fact]
+    public void SkipsWhenNothingIsOpenButStillReschedules()
+    {
+        var n = new RecurringNudge(Hour, T0);
+        Assert.False(n.TryFire(T0.AddHours(1), 0));
+        Assert.False(n.TryFire(T0.AddHours(1).AddMinutes(30), 5)); // next is T0+2h, not due yet
+        Assert.True(n.TryFire(T0.AddHours(2), 5));
+    }
+
+    [Fact]
+    public void LongGapGivesOneNudgeNotABurst()
+    {
+        var n = new RecurringNudge(Hour, T0);
+        var wake = T0.AddHours(9); // laptop slept all night
+        Assert.True(n.TryFire(wake, 2));
+        Assert.False(n.TryFire(wake.AddSeconds(20), 2));
+        Assert.False(n.TryFire(wake.AddMinutes(59), 2));
+    }
+
+    [Fact]
+    public void ZeroIntervalIsOff()
+    {
+        var n = new RecurringNudge(TimeSpan.Zero, T0);
+        Assert.False(n.Enabled);
+        Assert.False(n.TryFire(T0.AddDays(3), 4));
+    }
+
+    [Fact]
+    public void ChangingTheIntervalRestartsTheCountdown()
+    {
+        var n = new RecurringNudge(Hour, T0);
+        n.SetInterval(TimeSpan.FromMinutes(30), T0.AddMinutes(50));
+        Assert.False(n.TryFire(T0.AddMinutes(60), 1));
+        Assert.True(n.TryFire(T0.AddMinutes(80), 1));
+        n.SetInterval(TimeSpan.Zero, T0.AddMinutes(81));
+        Assert.False(n.TryFire(T0.AddDays(1), 1));
+    }
+}

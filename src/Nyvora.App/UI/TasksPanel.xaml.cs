@@ -32,12 +32,35 @@ public sealed partial class TasksPanel : UserControl
 
     public event Action<bool>? AlwaysOnTopChanged;
 
+    public event Action<bool>? StatusReminderChanged;
+
+    private void OnStatusReminderChanged(bool on) => StatusReminderChanged?.Invoke(on);
+
+    private string? _nudge;
+
+    /// <summary>Shows a banner above the task list (cleared by <see cref="ClearNudge"/> when the pill collapses).</summary>
+    public void ShowNudge(string message)
+    {
+        _nudge = message;
+        ShowTasks();
+        Refresh();
+    }
+
+    public void ClearNudge()
+    {
+        if (_nudge is not null)
+        {
+            _nudge = null;
+            Refresh();
+        }
+    }
+
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
 
-    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses)
+    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses, bool statusReminder)
     {
         TopToggle.IsChecked = alwaysOnTop;
-        Settings.Attach(statuses);
+        Settings.Attach(statuses, statusReminder);
         statuses.Changed += Refresh;
         _tasks.Changed -= Refresh;
         _tasks = tasks;
@@ -120,12 +143,24 @@ public sealed partial class TasksPanel : UserControl
         Summary.Text = due > 0 ? $"{_tasks.OpenCount} open · {due} due" : $"{_tasks.OpenCount} open";
 
         Rows.Children.Clear();
+        if (_nudge is not null)
+        {
+            Rows.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 8, 10, 8),
+                Margin = new Thickness(0, 0, 0, 6),
+                Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFB, 0xBF, 0x24)),
+                Child = new TextBlock { Text = _nudge, FontSize = 13, Foreground = DueBrush, TextWrapping = TextWrapping.Wrap },
+            });
+        }
+
         foreach (var item in _tasks.Ordered())
         {
             Rows.Children.Add(BuildRow(item, now));
         }
 
-        if (_tasks.Items.Count == 0)
+        if (_tasks.Items.Count == 0 && _nudge is null)
         {
             Rows.Children.Add(new TextBlock
             {

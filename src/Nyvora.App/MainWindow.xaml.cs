@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
     private readonly TaskList _tasks;
     private readonly SettingsStore _settings = new();
     private readonly UpdateService _updates;
+    private readonly RecurringNudge _statusNudge;
     private readonly DispatcherQueueTimer _updateCheckTimer;
 
     private SizeD _current = PillAnimator.RestingSize;
@@ -41,6 +42,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         _updates = new UpdateService(_settings);
+        _statusNudge = new RecurringNudge(TimeSpan.FromMinutes(_settings.Current.StatusReminderMinutes), DateTimeOffset.Now);
         _host = new PillWindowHost(this, _settings.Current.AlwaysOnTop);
         // handledEventsToo: buttons and text boxes mark PointerPressed handled, but they still need to pull focus.
         Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnRootPointerPressed), true);
@@ -56,7 +58,14 @@ public sealed partial class MainWindow : Window
         _tasks.Changed += OnTasksChanged;
         _updates.Changed += UpdateBadge;
         _updates.RestartRequested += Close;
-        Panel.Attach(_tasks, _updates, _settings.Current.AlwaysOnTop, _statuses);
+        Panel.Attach(_tasks, _updates, _settings.Current.AlwaysOnTop, _statuses, _statusNudge.Enabled);
+        Panel.StatusReminderChanged += on =>
+        {
+            var minutes = on ? 60 : 0;
+            _settings.Current.StatusReminderMinutes = minutes;
+            _settings.Save();
+            _statusNudge.SetInterval(TimeSpan.FromMinutes(minutes), DateTimeOffset.Now);
+        };
         Panel.AlwaysOnTopChanged += on =>
         {
             _host.SetAlwaysOnTop(on);
@@ -170,6 +179,7 @@ public sealed partial class MainWindow : Window
 
     private void CheckReminders()
     {
+        CheckStatusNudge();
         var fired = _tasks.TakePendingNotifications(DateTimeOffset.Now);
         UpdateBadge();
         if (fired.Count == 0)
@@ -178,13 +188,29 @@ public sealed partial class MainWindow : Window
         }
 
         Log.Info($"{fired.Count} reminder(s) due");
+        ExpandPassively();
+    }
 
-        // Surface the reminder without taking focus from whatever the user is doing.
+    /// <summary>Opens the pill without taking focus from whatever the user is doing.</summary>
+    private void ExpandPassively()
+    {
         if (_machine.State is PillState.Resting or PillState.Collapsing)
         {
             _passiveExpand = true;
             _machine.RequestExpand();
         }
+    }
+
+    private void CheckStatusNudge()
+    {
+        if (!_statusNudge.TryFire(DateTimeOffset.Now, _tasks.OpenCount))
+        {
+            return;
+        }
+
+        Log.Info($"Status reminder ({_tasks.OpenCount} open)");
+        Panel.ShowNudge($"Time to update your task statuses ({_tasks.OpenCount} open)");
+        ExpandPassively();
     }
 
     private void UpdateBadge()
@@ -251,6 +277,7 @@ public sealed partial class MainWindow : Window
                 break;
             case PillState.Resting:
                 Panel.ShowTasks();
+                Panel.ClearNudge();
                 _awayTimer.Stop();
                 _host.SetNoActivate(true);
                 break;

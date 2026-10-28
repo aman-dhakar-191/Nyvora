@@ -22,8 +22,14 @@ public sealed partial class StatusSettingsView : UserControl
 
     public event Action? BackRequested;
 
-    internal void Attach(StatusSet statuses)
+    public event Action<bool>? StatusReminderChanged;
+
+    private void OnReminderClick(object sender, RoutedEventArgs e) =>
+        StatusReminderChanged?.Invoke(ReminderToggle.IsChecked == true);
+
+    internal void Attach(StatusSet statuses, bool statusReminder)
     {
+        ReminderToggle.IsChecked = statusReminder;
         _statuses.Changed -= Rebuild;
         _statuses = statuses;
         _statuses.Changed += Rebuild;

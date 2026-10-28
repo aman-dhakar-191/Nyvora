@@ -11,6 +11,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <StackPanel Orientation="Horizontal" Spacing="12">
@@ -42,7 +43,11 @@
             <ui:HandButton Grid.Column="2" Content="Add" Click="OnAdd" />
         </Grid>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="4" FontSize="12" Foreground="#FFFB7185" MinHeight="16"
+        <ui:HandCheckBox x:Name="ReminderToggle" Grid.Row="4" FontSize="12" MinWidth="0"
+                         Content="Every hour, open Nyvora to remind me to update task statuses"
+                         Click="OnReminderClick" />
+
+        <TextBlock x:Name="ErrorText" Grid.Row="5" FontSize="12" Foreground="#FFFB7185" MinHeight="16"
                    TextWrapping="Wrap" />
     </Grid>
 </UserControl>

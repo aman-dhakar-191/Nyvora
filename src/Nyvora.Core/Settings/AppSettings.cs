@@ -16,6 +16,9 @@ public sealed class AppSettings
     /// <summary>User-defined task statuses (name and whether they count as done). Validated by <see cref="StatusSet"/>.</summary>
     public List<StatusDef> Statuses { get; set; } = StatusSet.DefaultDefs();
 
+    /// <summary>How often (minutes) Nyvora opens to ask you to update task statuses. 0 turns it off.</summary>
+    public int StatusReminderMinutes { get; set; } = 60;
+
     public DateTimeOffset? LastUpdateCheck { get; set; }
 
     public bool IsUpdateCheckDue(DateTimeOffset now) =>
