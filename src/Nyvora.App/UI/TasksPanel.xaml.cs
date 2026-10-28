@@ -197,7 +197,16 @@ public sealed partial class TasksPanel : UserControl
 
         if (isDue)
         {
-            var snooze = new HandButton { Content = "Snooze", Padding = new Thickness(8, 2, 8, 2), FontSize = 12 };
+            var snooze = new HandButton
+            {
+                Content = new TextBlock { Text = "💤", FontSize = 14 },
+                Padding = new Thickness(6, 2, 6, 2),
+                MinHeight = 0,
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTipService.SetToolTip(snooze, $"Snooze {(int)Reminders.SnoozeDuration.TotalMinutes} minutes");
             snooze.Click += (_, _) => _tasks.Snooze(item.Id, DateTimeOffset.Now, Reminders.SnoozeDuration);
             Grid.SetColumn(snooze, 4);
             row.Children.Add(snooze);
