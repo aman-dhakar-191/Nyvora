@@ -149,6 +149,7 @@ public class AppSettingsTests : IDisposable
     {
         var path = Path.Combine(_dir, "settings.json");
         Assert.True(AppSettings.Load(path).AutoCheckUpdates);
+        Assert.True(AppSettings.Load(path).AlwaysOnTop);
 
         Directory.CreateDirectory(_dir);
         File.WriteAllText(path, "{ nope");
@@ -160,10 +161,11 @@ public class AppSettingsTests : IDisposable
     {
         var path = Path.Combine(_dir, "settings.json");
         var when = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
-        new AppSettings { AutoCheckUpdates = false, LastUpdateCheck = when }.Save(path);
+        new AppSettings { AutoCheckUpdates = false, AlwaysOnTop = false, LastUpdateCheck = when }.Save(path);
 
         var loaded = AppSettings.Load(path);
         Assert.False(loaded.AutoCheckUpdates);
+        Assert.False(loaded.AlwaysOnTop);
         Assert.Equal(when, loaded.LastUpdateCheck);
     }
 

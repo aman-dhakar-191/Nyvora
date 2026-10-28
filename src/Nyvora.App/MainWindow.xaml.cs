@@ -27,7 +27,8 @@ public sealed partial class MainWindow : Window
     private readonly JsonTaskStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json"));
     private readonly TaskList _tasks;
-    private readonly UpdateService _updates = new();
+    private readonly SettingsStore _settings = new();
+    private readonly UpdateService _updates;
     private readonly DispatcherQueueTimer _updateCheckTimer;
 
     private SizeD _current = PillAnimator.RestingSize;
@@ -37,7 +38,8 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _host = new PillWindowHost(this);
+        _updates = new UpdateService(_settings);
+        _host = new PillWindowHost(this, _settings.Current.AlwaysOnTop);
         // handledEventsToo: buttons and text boxes mark PointerPressed handled, but they still need to pull focus.
         Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnRootPointerPressed), true);
 
@@ -45,7 +47,13 @@ public sealed partial class MainWindow : Window
         _tasks.Changed += OnTasksChanged;
         _updates.Changed += UpdateBadge;
         _updates.RestartRequested += Close;
-        Panel.Attach(_tasks, _updates);
+        Panel.Attach(_tasks, _updates, _settings.Current.AlwaysOnTop);
+        Panel.AlwaysOnTopChanged += on =>
+        {
+            _host.SetAlwaysOnTop(on);
+            _settings.Current.AlwaysOnTop = on;
+            _settings.Save();
+        };
         Panel.CollapseRequested += () => _machine.RequestCollapse();
         Panel.QuitRequested += Close;
 

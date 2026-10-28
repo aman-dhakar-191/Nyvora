@@ -9,6 +9,9 @@ public sealed class AppSettings
     /// <summary>Set to false in settings.json to stop all automatic network requests.</summary>
     public bool AutoCheckUpdates { get; set; } = true;
 
+    /// <summary>Keep the pill above other windows. Exclusive-fullscreen apps and games still cover it.</summary>
+    public bool AlwaysOnTop { get; set; } = true;
+
     public DateTimeOffset? LastUpdateCheck { get; set; }
 
     public bool IsUpdateCheckDue(DateTimeOffset now) =>

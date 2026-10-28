@@ -26,8 +26,13 @@ public sealed partial class TasksPanel : UserControl
 
     public event Action? QuitRequested;
 
-    internal void Attach(TaskList tasks, UpdateService updates)
+    public event Action<bool>? AlwaysOnTopChanged;
+
+    private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
+
+    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop)
     {
+        TopToggle.IsChecked = alwaysOnTop;
         _tasks.Changed -= Refresh;
         _tasks = tasks;
         _tasks.Changed += Refresh;

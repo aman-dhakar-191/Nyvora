@@ -25,7 +25,7 @@ internal sealed class PillWindowHost : IDisposable
     private readonly SubclassProc _subclass; // field keeps the delegate alive for native callbacks
     private SizeD _size = PillAnimator.RestingSize;
 
-    public PillWindowHost(Window window)
+    public PillWindowHost(Window window, bool alwaysOnTop)
     {
         _window = window;
         _hwnd = WindowNative.GetWindowHandle(window);
@@ -38,7 +38,7 @@ internal sealed class PillWindowHost : IDisposable
             p.IsMinimizable = false;
             // Topmost keeps the pill above normal windows. Exclusive-fullscreen apps and games
             // are not affected by this flag (documented limitation).
-            p.IsAlwaysOnTop = true;
+            p.IsAlwaysOnTop = alwaysOnTop;
             p.SetBorderAndTitleBar(false, false);
         }
 
@@ -51,6 +51,14 @@ internal sealed class PillWindowHost : IDisposable
 
         _subclass = OnMessage;
         SetWindowSubclass(_hwnd, _subclass, 1, 0);
+    }
+
+    public void SetAlwaysOnTop(bool value)
+    {
+        if (_appWindow.Presenter is OverlappedPresenter p)
+        {
+            p.IsAlwaysOnTop = value;
+        }
     }
 
     public double Scale => GetDpiForWindow(_hwnd) / 96.0;

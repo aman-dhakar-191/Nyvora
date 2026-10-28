@@ -1,0 +1,24 @@
+using Nyvora.Core.Settings;
+
+namespace Nyvora.App.Services;
+
+/// <summary>Single shared <see cref="AppSettings"/> instance so independent features cannot overwrite each other's fields.</summary>
+internal sealed class SettingsStore
+{
+    private static readonly string FilePath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "settings.json");
+
+    public AppSettings Current { get; } = AppSettings.Load(FilePath);
+
+    public void Save()
+    {
+        try
+        {
+            Current.Save(FilePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not save settings", ex);
+        }
+    }
+}

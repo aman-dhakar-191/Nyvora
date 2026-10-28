@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Headers;
-using Nyvora.Core.Settings;
 using Nyvora.Core.Updates;
 
 namespace Nyvora.App.Services;
@@ -43,9 +42,10 @@ Start-Process -FilePath $env:NYVORA_EXE";
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora");
 
     private static readonly string UpdatesDir = Path.Combine(NyvoraDir, "updates");
-    private static readonly string SettingsPath = Path.Combine(NyvoraDir, "settings.json");
 
-    private readonly AppSettings _settings = AppSettings.Load(SettingsPath);
+    private readonly SettingsStore _store;
+
+    public UpdateService(SettingsStore store) => _store = store;
 
     public Version Current { get; } = typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0, 0);
 
@@ -85,7 +85,7 @@ Start-Process -FilePath $env:NYVORA_EXE";
 
     public async Task AutoCheckAsync()
     {
-        if (_settings.IsUpdateCheckDue(DateTimeOffset.Now))
+        if (_store.Current.IsUpdateCheckDue(DateTimeOffset.Now))
         {
             await CheckAsync();
         }
@@ -105,8 +105,8 @@ Start-Process -FilePath $env:NYVORA_EXE";
             var json = await Http.GetStringAsync(ReleaseFeed.ReleasesApiUrl, cts.Token);
             var info = ReleaseFeed.FindUpdate(json, Current);
 
-            _settings.LastUpdateCheck = DateTimeOffset.Now;
-            TrySaveSettings();
+            _store.Current.LastUpdateCheck = DateTimeOffset.Now;
+            _store.Save();
 
             Available = info;
             if (info is null)
@@ -232,18 +232,6 @@ Start-Process -FilePath $env:NYVORA_EXE";
         State = state;
         Message = message;
         Changed?.Invoke();
-    }
-
-    private void TrySaveSettings()
-    {
-        try
-        {
-            _settings.Save(SettingsPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            Log.Error("Could not save settings", ex);
-        }
     }
 
     private static void TryDelete(string dir)
