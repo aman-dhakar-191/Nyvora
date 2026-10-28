@@ -88,7 +88,10 @@ public sealed partial class MainWindow : Window
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
         _awayTimer.Tick += (_, _) =>
         {
-            if (_host.PollClickOutside())
+            // Always sample so the press edge stays accurate, but a click inside an open popup (time picker,
+            // menus) lands outside the small window and must not collapse the pill.
+            var outside = _host.PollClickOutside();
+            if (outside && !AnyPopupOpen())
             {
                 Collapse("click outside");
             }
@@ -220,7 +223,7 @@ public sealed partial class MainWindow : Window
     private void UpdateBadge()
     {
         var due = _tasks.DueCount(DateTimeOffset.Now);
-        RestingLabel.Text = due > 0 ? $"{due} due" : "Nyvora";
+        RestingLabel.Text = PillLabel.For(due, _tasks.OpenCount);
         StatusDot.Fill = due > 0 ? DueBrush
             : _updates.State == UpdateState.Available ? UpdateBrush
             : AccentBrush;
@@ -326,6 +329,9 @@ public sealed partial class MainWindow : Window
     {
         args.Handled = Collapse("Esc");
     }
+
+    private bool AnyPopupOpen() =>
+        Root.XamlRoot is { } root && VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Count > 0;
 
     private bool Collapse(string reason)
     {

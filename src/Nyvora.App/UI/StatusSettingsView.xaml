@@ -4,35 +4,13 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="using:Nyvora.App.UI">
 
-    <Grid Padding="24,18,24,14" RowSpacing="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <StackPanel Orientation="Horizontal" Spacing="12">
-            <ui:HandButton Click="OnBack" Padding="8,4">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon Glyph="&#xE72B;" FontSize="12" />
-                    <TextBlock Text="Back" />
-                </StackPanel>
-            </ui:HandButton>
-            <TextBlock Text="Task statuses" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8"
-                       VerticalAlignment="Center" />
-        </StackPanel>
-
-        <TextBlock Grid.Row="1" FontSize="12" Foreground="#FF9A9AB0" TextWrapping="Wrap"
+    <StackPanel Spacing="8">
+        <TextBlock FontSize="12" Foreground="#FF9A9AB0" TextWrapping="Wrap"
                    Text="Rename, reorder, add or remove. Tick Done for statuses that finish a task. Keep at least one done and one not done." />
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="Rows" Spacing="4" />
-        </ScrollViewer>
+        <StackPanel x:Name="Rows" Spacing="4" />
 
-        <Grid Grid.Row="3" ColumnSpacing="8">
+        <Grid ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -43,11 +21,6 @@
             <ui:HandButton Grid.Column="2" Content="Add" Click="OnAdd" />
         </Grid>
 
-        <ui:HandCheckBox x:Name="ReminderToggle" Grid.Row="4" FontSize="12" MinWidth="0"
-                         Content="Every hour, open Nyvora to remind me to update task statuses"
-                         Click="OnReminderClick" />
-
-        <TextBlock x:Name="ErrorText" Grid.Row="5" FontSize="12" Foreground="#FFFB7185" MinHeight="16"
-                   TextWrapping="Wrap" />
-    </Grid>
+        <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FFFB7185" MinHeight="16" TextWrapping="Wrap" />
+    </StackPanel>
 </UserControl>

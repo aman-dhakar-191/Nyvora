@@ -13,7 +13,6 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid>
@@ -24,7 +23,7 @@
             <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock x:Name="Summary" FontSize="12" Foreground="#FF9A9AB0" VerticalAlignment="Center" />
                 <ui:HandButton Click="OnSettingsClick" Padding="6" BorderThickness="0" Background="Transparent"
-                               ToolTipService.ToolTip="Task statuses">
+                               ToolTipService.ToolTip="Settings">
                     <FontIcon Glyph="&#xE713;" FontSize="14" />
                 </ui:HandButton>
             </StackPanel>
@@ -48,25 +47,18 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <TextBlock x:Name="UpdateText" FontSize="12" Foreground="#FF9A9AB0" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" />
-            <ui:HandButton x:Name="UpdateButton" Grid.Column="1" Padding="10,3" FontSize="12"
-                           Click="OnUpdateClick" />
-        </Grid>
-
-        <Grid Grid.Row="5" ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <ui:HandCheckBox x:Name="TopToggle" Content="Always on top" FontSize="12" MinWidth="0"
-                             Click="OnTopClick" VerticalAlignment="Center" />
+            <Grid VerticalAlignment="Center">
+                <TextBlock x:Name="Hint" Text="Esc or click away to collapse" FontSize="12" Foreground="#FF6E6E85" />
+                <ui:HandButton x:Name="UpdateNotice" Visibility="Collapsed" Click="OnSettingsClick" Padding="8,3"
+                               FontSize="12" Foreground="#FF60A5FA" BorderThickness="0" Background="Transparent"
+                               HorizontalAlignment="Left" ToolTipService.ToolTip="Open settings to install" />
+            </Grid>
             <ui:HandButton Grid.Column="1" Content="Collapse" Click="OnCollapse" />
             <ui:HandButton Grid.Column="2" Content="Quit" Click="OnQuit" />
         </Grid>
     </Grid>
-    <ui:StatusSettingsView x:Name="Settings" Visibility="Collapsed" BackRequested="OnSettingsBack" StatusReminderChanged="OnStatusReminderChanged" />
+    <ui:SettingsView x:Name="Settings" Visibility="Collapsed" BackRequested="OnSettingsBack" />
     </Grid>
 </UserControl>

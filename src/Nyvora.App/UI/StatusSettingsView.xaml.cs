@@ -20,16 +20,8 @@ public sealed partial class StatusSettingsView : UserControl
         ClipboardText.Attach(NewName);
     }
 
-    public event Action? BackRequested;
-
-    public event Action<bool>? StatusReminderChanged;
-
-    private void OnReminderClick(object sender, RoutedEventArgs e) =>
-        StatusReminderChanged?.Invoke(ReminderToggle.IsChecked == true);
-
-    internal void Attach(StatusSet statuses, bool statusReminder)
+    internal void Attach(StatusSet statuses)
     {
-        ReminderToggle.IsChecked = statusReminder;
         _statuses.Changed -= Rebuild;
         _statuses = statuses;
         _statuses.Changed += Rebuild;
@@ -143,9 +135,4 @@ public sealed partial class StatusSettingsView : UserControl
         }
     }
 
-    private void OnBack(object sender, RoutedEventArgs e)
-    {
-        ErrorText.Text = "";
-        BackRequested?.Invoke();
-    }
 }

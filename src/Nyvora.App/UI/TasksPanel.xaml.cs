@@ -24,6 +24,8 @@ public sealed partial class TasksPanel : UserControl
     {
         InitializeComponent();
         ClipboardText.Attach(Input);
+        Settings.AlwaysOnTopChanged += on => AlwaysOnTopChanged?.Invoke(on);
+        Settings.StatusReminderChanged += on => StatusReminderChanged?.Invoke(on);
     }
 
     public event Action? CollapseRequested;
@@ -33,8 +35,6 @@ public sealed partial class TasksPanel : UserControl
     public event Action<bool>? AlwaysOnTopChanged;
 
     public event Action<bool>? StatusReminderChanged;
-
-    private void OnStatusReminderChanged(bool on) => StatusReminderChanged?.Invoke(on);
 
     private string? _nudge;
 
@@ -55,12 +55,9 @@ public sealed partial class TasksPanel : UserControl
         }
     }
 
-    private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
-
     internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses, bool statusReminder)
     {
-        TopToggle.IsChecked = alwaysOnTop;
-        Settings.Attach(statuses, statusReminder);
+        Settings.Attach(statuses, updates, alwaysOnTop, statusReminder);
         statuses.Changed += Refresh;
         _tasks.Changed -= Refresh;
         _tasks = tasks;
@@ -69,12 +66,12 @@ public sealed partial class TasksPanel : UserControl
 
         if (_updates is not null)
         {
-            _updates.Changed -= RefreshUpdate;
+            _updates.Changed -= RefreshUpdateNotice;
         }
 
         _updates = updates;
-        _updates.Changed += RefreshUpdate;
-        RefreshUpdate();
+        _updates.Changed += RefreshUpdateNotice;
+        RefreshUpdateNotice();
     }
 
     /// <summary>Returns to the task list (used when the pill collapses so it always reopens on tasks).</summary>
@@ -92,46 +89,13 @@ public sealed partial class TasksPanel : UserControl
 
     private void OnSettingsBack() => ShowTasks();
 
-    private void RefreshUpdate()
+    /// <summary>A quiet hint in the footer when an update is waiting; installing lives in Settings.</summary>
+    private void RefreshUpdateNotice()
     {
-        if (_updates is not { } u)
-        {
-            return;
-        }
-
-        UpdateText.Text = u.State == UpdateState.Idle ? u.CurrentText : $"{u.CurrentText} · {u.Message}";
-        var busy = u.State is UpdateState.Checking or UpdateState.Downloading or UpdateState.Installing;
-        var installable = u.State == UpdateState.Available && u.Available is not null;
-
-        UpdateButton.IsEnabled = !busy && (!installable || u.CanInstall);
-        UpdateButton.Content = installable
-            ? (u.CanInstall ? "Install and restart" : "Update available")
-            : "Check for updates";
-    }
-
-    private async void OnUpdateClick(object sender, RoutedEventArgs e)
-    {
-        if (_updates is not { } u)
-        {
-            return;
-        }
-
-        try
-        {
-            if (u.State == UpdateState.Available)
-            {
-                await u.InstallAsync();
-            }
-            else
-            {
-                await u.CheckAsync();
-            }
-        }
-        catch (Exception ex)
-        {
-            // Last resort so an unexpected failure cannot crash the app from an async void handler.
-            Log.Error("Update action failed", ex);
-        }
+        var available = _updates is { State: UpdateState.Available, Available: { } info } ? info : null;
+        UpdateNotice.Visibility = available is null ? Visibility.Collapsed : Visibility.Visible;
+        Hint.Visibility = available is null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNotice.Content = available is null ? "" : $"Update {available.Tag} available";
     }
 
     public void FocusInput() => Input.Focus(FocusState.Programmatic);
@@ -210,7 +174,8 @@ public sealed partial class TasksPanel : UserControl
             {
                 Content = new TextBlock
                 {
-                    Text = item.RemindAt is { } at ? (isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now) : "⏰ Add",
+                    Text = item.RemindAt is { } at ? (isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now) : "⏰",
+                    Opacity = item.RemindAt is null ? 0.55 : 1, // a quiet bell until a reminder exists
                     FontSize = 12,
                     Foreground = isDue ? DueBrush : MutedBrush,
                 },
@@ -284,43 +249,33 @@ public sealed partial class TasksPanel : UserControl
         presets.Children.Add(Button("Tomorrow 9:00", () => Apply(Reminders.Resolve(ReminderPreset.TomorrowMorning, DateTimeOffset.Now))));
         presets.Children.Add(Button("Clear", () => Apply(null), enabled: item.RemindAt is not null));
 
-        var time = new TextBox { PlaceholderText = "Time, e.g. 14:30 or 2:30 pm", Width = 190, MaxLength = 12 };
-        ClipboardText.Attach(time);
-        var error = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)), TextWrapping = TextWrapping.Wrap };
-        void SetCustom()
+        // A time that has already passed today means the same time tomorrow (see Reminders.TryParseClock).
+        var now = DateTimeOffset.Now;
+        var suggestion = now.AddMinutes(15 - now.Minute % 15);
+        var picker = new TimePicker { Time = new TimeSpan(suggestion.Hour, suggestion.Minute, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        picker.Loaded += (_, _) => picker.StartBringIntoView(); // the list area is small; keep the editor visible
+        void SetFromPicker()
         {
-            if (Reminders.TryParseClock(time.Text, DateTimeOffset.Now, out var at))
+            var t = picker.Time;
+            if (Reminders.TryParseClock($"{t.Hours}:{t.Minutes:00}", DateTimeOffset.Now, out var at))
             {
                 Apply(at);
             }
-            else
-            {
-                error.Text = "Use a time like 14:30 or 2:30 pm.";
-            }
         }
 
-        time.KeyDown += (_, e) =>
+        var custom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        custom.Children.Add(picker);
+        custom.Children.Add(new HandButton
         {
-            if (e.Key == VirtualKey.Enter)
-            {
-                SetCustom();
-                e.Handled = true;
-            }
-        };
-        time.Loaded += (_, _) =>
-        {
-            time.Focus(FocusState.Programmatic);
-            time.StartBringIntoView(); // the list area is small; keep the editor visible
-        };
+            Content = "Set",
+            Padding = new Thickness(14, 5, 14, 5),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        ((HandButton)custom.Children[1]).Click += (_, _) => SetFromPicker();
 
-        var custom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        custom.Children.Add(time);
-        custom.Children.Add(Button("Set", SetCustom));
-
-        var box = new StackPanel { Spacing = 6 };
+        var box = new StackPanel { Spacing = 8 };
         box.Children.Add(presets);
         box.Children.Add(custom);
-        box.Children.Add(error);
 
         return new Border
         {
