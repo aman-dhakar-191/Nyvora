@@ -17,6 +17,7 @@ namespace Nyvora.App.Windowing;
 internal sealed class PillWindowHost : IDisposable
 {
     private const int TopMarginDip = 8;
+    private const int EdgeMarginDip = 8;
     private const int MaxCornerRadiusDip = 24;
 
     private readonly Window _window;
@@ -95,6 +96,11 @@ internal sealed class PillWindowHost : IDisposable
     public void Focus()
     {
         SetNoActivate(false);
+        if (GetForegroundWindow() == _hwnd)
+        {
+            return; // already the active window; re-activating on every click can disturb text selection
+        }
+
         _window.Activate();
         SetForegroundWindow(_hwnd);
     }
@@ -123,19 +129,40 @@ internal sealed class PillWindowHost : IDisposable
 
     public void ResetClickTracking() => _buttonWasDown = true; // ignore a press already in progress
 
-    /// <summary>Resizes (in DIPs) around the top-center anchor and re-clips to a rounded shape.</summary>
-    public void Apply(SizeD sizeDip)
+    private double _extra;
+    private bool _hasRect;
+    private RectInt32 _lastRect;
+
+    /// <summary>
+    /// Sizes the window (in DIPs): the pill is centered under the top edge, and <paramref name="extraRightDip"/> adds
+    /// a panel to its right (settings). The window only moves left when that would push it off the display.
+    /// Unchanged geometry is skipped, so redundant frames cost nothing and cannot flicker.
+    /// </summary>
+    public void Apply(SizeD sizeDip, double extraRightDip = 0)
     {
         _size = sizeDip;
+        _extra = extraRightDip;
         var scale = Scale;
         var area = DisplayArea.Primary.OuterBounds;
 
-        var w = Math.Max(1, (int)Math.Round(sizeDip.Width * scale));
+        var pillW = Math.Max(1, (int)Math.Round(sizeDip.Width * scale));
+        var w = Math.Max(1, (int)Math.Round((sizeDip.Width + extraRightDip) * scale));
         var h = Math.Max(1, (int)Math.Round(sizeDip.Height * scale));
-        var x = area.X + (area.Width - w) / 2;
+        var margin = (int)Math.Round(EdgeMarginDip * scale);
+
+        var x = area.X + (area.Width - pillW) / 2;
+        x = Math.Max(area.X + margin, Math.Min(x, area.X + area.Width - w - margin));
         var y = area.Y + (int)Math.Round(TopMarginDip * scale);
 
-        _appWindow.MoveAndResize(new RectInt32(x, y, w, h));
+        var rect = new RectInt32(x, y, w, h);
+        if (_hasRect && _lastRect.Equals(rect))
+        {
+            return;
+        }
+
+        _hasRect = true;
+        _lastRect = rect;
+        _appWindow.MoveAndResize(rect);
 
         var radius = (int)Math.Round(Math.Min(sizeDip.Height / 2, MaxCornerRadiusDip) * scale);
         // The system takes ownership of the region handle after a successful SetWindowRgn.
@@ -147,7 +174,11 @@ internal sealed class PillWindowHost : IDisposable
         if (msg is WM_DPICHANGED or WM_DISPLAYCHANGE or WM_SETTINGCHANGE)
         {
             // Re-run placement against the (possibly new) primary display and DPI.
-            _window.DispatcherQueue.TryEnqueue(() => Apply(_size));
+            _window.DispatcherQueue.TryEnqueue(() =>
+            {
+                _hasRect = false; // geometry may be identical in DIPs but not in pixels
+                Apply(_size, _extra);
+            });
         }
 
         return DefSubclassProc(hWnd, msg, wParam, lParam);

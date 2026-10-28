@@ -6,6 +6,16 @@ public static class ExpandedSizing
     /// <summary>Smallest size at which the panel's controls still fit without clipping.</summary>
     public static readonly SizeD Min = new(400, 320);
 
+    public const double DefaultSideWidth = 380;
+    public const double MinSideWidth = 260;
+
+    /// <summary>
+    /// Width of the settings panel that opens to the right of the expanded pill: what fits on the display,
+    /// between <see cref="MinSideWidth"/> and <see cref="DefaultSideWidth"/>.
+    /// </summary>
+    public static double SideWidth(SizeD expanded, SizeD available) =>
+        Math.Clamp(available.Width - expanded.Width, MinSideWidth, DefaultSideWidth);
+
     /// <summary>Forces <paramref name="size"/> between <see cref="Min"/> and what the display can hold.</summary>
     public static SizeD Clamp(SizeD size, SizeD available)
     {

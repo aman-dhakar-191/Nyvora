@@ -59,6 +59,5 @@
             <ui:HandButton Grid.Column="2" Content="Quit" Click="OnQuit" />
         </Grid>
     </Grid>
-    <ui:SettingsView x:Name="Settings" Visibility="Collapsed" BackRequested="OnSettingsBack" />
     </Grid>
 </UserControl>

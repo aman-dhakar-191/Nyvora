@@ -135,6 +135,31 @@ public sealed class TaskList
         return item;
     }
 
+    /// <summary>Changes a task's title. False when nothing changed (unknown task, blank or identical title).</summary>
+    public bool Rename(Guid id, string title)
+    {
+        var item = Find(id);
+        title = (title ?? "").Trim();
+        if (item is null || title.Length == 0)
+        {
+            return false;
+        }
+
+        if (title.Length > MaxTitleLength)
+        {
+            title = title[..MaxTitleLength];
+        }
+
+        if (item.Title == title)
+        {
+            return false;
+        }
+
+        item.Title = title;
+        Changed?.Invoke();
+        return true;
+    }
+
     public bool Toggle(Guid id)
     {
         var item = Find(id);

@@ -55,6 +55,9 @@ internal static class NativeMethods
     public static extern bool GetWindowRect(nint hWnd, out RECT rect);
 
     [DllImport("user32.dll")]
+    public static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(nint hWnd);
 

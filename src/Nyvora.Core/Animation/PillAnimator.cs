@@ -12,6 +12,8 @@ public sealed class PillAnimator
     public static readonly SizeD DefaultExpandedSize = new(420, 400);
 
     public static readonly TimeSpan ExpandDuration = TimeSpan.FromMilliseconds(320);
+    public static readonly TimeSpan SideDuration = TimeSpan.FromMilliseconds(280);
+
     public static readonly TimeSpan CollapseDuration = TimeSpan.FromMilliseconds(240);
 
     private readonly SizeD _from;

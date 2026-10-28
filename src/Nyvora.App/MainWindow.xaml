@@ -15,8 +15,14 @@
         </Grid.ContextFlyout>
 
         <!-- Expanded content: fixed width so it never reflows while the window grows. -->
-        <ui:TasksPanel x:Name="Panel" HorizontalAlignment="Center"
+        <ui:TasksPanel x:Name="Panel" HorizontalAlignment="Left"
                        VerticalAlignment="Top" Opacity="0" IsHitTestVisible="False" />
+
+        <!-- Settings: opens to the right of the pill by widening the window, not by replacing the tasks. -->
+        <ui:SettingsView x:Name="Side" HorizontalAlignment="Left" VerticalAlignment="Top" Opacity="0"
+                         IsHitTestVisible="False" CloseRequested="OnSettingsClose" />
+        <Border x:Name="SideDivider" Width="1" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                Background="#22FFFFFF" Opacity="0" IsHitTestVisible="False" />
 
         <!-- Resize grip: drag to resize the expanded pill (kept under the top edge); double-click resets. -->
         <ui:ResizeGrip x:Name="Grip" Width="16" Height="16" Margin="0,0,10,10" HorizontalAlignment="Right"

@@ -24,17 +24,14 @@ public sealed partial class TasksPanel : UserControl
     {
         InitializeComponent();
         ClipboardText.Attach(Input);
-        Settings.AlwaysOnTopChanged += on => AlwaysOnTopChanged?.Invoke(on);
-        Settings.StatusReminderChanged += on => StatusReminderChanged?.Invoke(on);
     }
 
     public event Action? CollapseRequested;
 
     public event Action? QuitRequested;
 
-    public event Action<bool>? AlwaysOnTopChanged;
-
-    public event Action<bool>? StatusReminderChanged;
+    /// <summary>The gear (or the update notice) asks the window to toggle the settings panel.</summary>
+    public event Action? SettingsRequested;
 
     private string? _nudge;
 
@@ -42,7 +39,6 @@ public sealed partial class TasksPanel : UserControl
     public void ShowNudge(string message)
     {
         _nudge = message;
-        ShowTasks();
         Refresh();
     }
 
@@ -55,9 +51,8 @@ public sealed partial class TasksPanel : UserControl
         }
     }
 
-    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses, TagSet tags, bool statusReminder)
+    internal void Attach(TaskList tasks, UpdateService updates, StatusSet statuses, TagSet tags)
     {
-        Settings.Attach(statuses, tags, updates, alwaysOnTop, statusReminder);
         tags.Changed += Refresh;
         statuses.Changed += Refresh;
         _tasks.Changed -= Refresh;
@@ -75,20 +70,7 @@ public sealed partial class TasksPanel : UserControl
         RefreshUpdateNotice();
     }
 
-    /// <summary>Returns to the task list (used when the pill collapses so it always reopens on tasks).</summary>
-    public void ShowTasks()
-    {
-        Settings.Visibility = Visibility.Collapsed;
-        TasksView.Visibility = Visibility.Visible;
-    }
-
-    private void OnSettingsClick(object sender, RoutedEventArgs e)
-    {
-        TasksView.Visibility = Visibility.Collapsed;
-        Settings.Visibility = Visibility.Visible;
-    }
-
-    private void OnSettingsBack() => ShowTasks();
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
 
     /// <summary>A quiet hint in the footer when an update is waiting; installing lives in Settings.</summary>
     private void RefreshUpdateNotice()
@@ -165,6 +147,13 @@ public sealed partial class TasksPanel : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
             TextDecorations = item.Done ? TextDecorations.Strikethrough : TextDecorations.None,
+            IsTextSelectionEnabled = true, // drag to select, Ctrl+C to copy
+        };
+        ToolTipService.SetToolTip(title, "Double-click to edit");
+        title.DoubleTapped += (_, e) =>
+        {
+            e.Handled = true;
+            BeginTitleEdit(row, title, item);
         };
         Grid.SetColumn(title, 2);
         row.Children.Add(title);
@@ -305,6 +294,51 @@ public sealed partial class TasksPanel : UserControl
         }
 
         return stack;
+    }
+
+    /// <summary>Swaps the title for a text box: Enter or clicking away saves, Esc cancels.</summary>
+    private void BeginTitleEdit(Grid row, TextBlock title, TaskItem item)
+    {
+        var box = new TextBox { Text = item.Title, MaxLength = TaskList.MaxTitleLength, VerticalAlignment = VerticalAlignment.Center };
+        ClipboardText.Attach(box);
+        row.Children.Remove(title);
+        Grid.SetColumn(box, 2);
+        row.Children.Add(box);
+
+        var finished = false;
+        void Finish(bool save)
+        {
+            if (finished)
+            {
+                return;
+            }
+
+            finished = true;
+            if (!save || !_tasks.Rename(item.Id, box.Text))
+            {
+                Refresh(); // cancelled, blank or unchanged: just draw the row again
+            }
+        }
+
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                Finish(true);
+                e.Handled = true;
+            }
+            else if (e.Key == VirtualKey.Escape)
+            {
+                Finish(false);
+                e.Handled = true; // Esc cancels the edit instead of collapsing the pill
+            }
+        };
+        box.LostFocus += (_, _) => Finish(true);
+        box.Loaded += (_, _) =>
+        {
+            box.Focus(FocusState.Programmatic);
+            box.SelectAll();
+        };
     }
 
     private Guid? _editingReminder;

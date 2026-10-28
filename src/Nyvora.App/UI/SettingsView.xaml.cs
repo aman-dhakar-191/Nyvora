@@ -12,7 +12,7 @@ public sealed partial class SettingsView : UserControl
 
     public SettingsView() => InitializeComponent();
 
-    public event Action? BackRequested;
+    public event Action? CloseRequested;
 
     public event Action<bool>? AlwaysOnTopChanged;
 
@@ -35,7 +35,7 @@ public sealed partial class SettingsView : UserControl
         RefreshUpdate();
     }
 
-    private void OnBack(object sender, RoutedEventArgs e) => BackRequested?.Invoke();
+    private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
 

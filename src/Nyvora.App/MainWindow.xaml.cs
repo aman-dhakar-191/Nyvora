@@ -20,10 +20,10 @@ public sealed partial class MainWindow : Window
 
     private readonly PillStateMachine _machine = new();
     private readonly PillWindowHost _host;
-    private readonly DispatcherQueueTimer _frameTimer;
     private readonly DispatcherQueueTimer _awayTimer;
     private readonly DispatcherQueueTimer _reminderTimer;
     private readonly Stopwatch _clock = new();
+    private readonly Stopwatch _sideClock = new();
     private readonly JsonTaskStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json"));
     private readonly StatusSet _statuses;
@@ -37,6 +37,11 @@ public sealed partial class MainWindow : Window
     private SizeD _current = PillAnimator.RestingSize;
     private SizeD _expandedSize = PillAnimator.DefaultExpandedSize;
     private PillAnimator? _animator;
+    private PillAnimator? _sideAnimator;
+    private bool _rendering;
+    private bool _settingsOpen;
+    private double _side;      // current width of the settings panel (DIPs)
+    private double _sideWidth; // width it has when fully open
     private bool _passiveExpand;
     private int _frames;
 
@@ -70,15 +75,17 @@ public sealed partial class MainWindow : Window
         _tasks.Changed += OnTasksChanged;
         _updates.Changed += UpdateBadge;
         _updates.RestartRequested += Close;
-        Panel.Attach(_tasks, _updates, _settings.Current.AlwaysOnTop, _statuses, _tags, _statusNudge.Enabled);
-        Panel.StatusReminderChanged += on =>
+        Panel.Attach(_tasks, _updates, _statuses, _tags);
+        Panel.SettingsRequested += ToggleSettings;
+        Side.Attach(_statuses, _tags, _updates, _settings.Current.AlwaysOnTop, _statusNudge.Enabled);
+        Side.StatusReminderChanged += on =>
         {
             var minutes = on ? 60 : 0;
             _settings.Current.StatusReminderMinutes = minutes;
             _settings.Save();
             _statusNudge.SetInterval(TimeSpan.FromMinutes(minutes), DateTimeOffset.Now);
         };
-        Panel.AlwaysOnTopChanged += on =>
+        Side.AlwaysOnTopChanged += on =>
         {
             _host.SetAlwaysOnTop(on);
             _settings.Current.AlwaysOnTop = on;
@@ -88,10 +95,6 @@ public sealed partial class MainWindow : Window
         Panel.QuitRequested += Close;
 
         var queue = DispatcherQueue.GetForCurrentThread();
-        _frameTimer = queue.CreateTimer();
-        _frameTimer.Interval = TimeSpan.FromMilliseconds(8);
-        _frameTimer.Tick += OnFrame;
-
         _awayTimer = queue.CreateTimer();
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
         _awayTimer.Tick += (_, _) =>
@@ -130,7 +133,7 @@ public sealed partial class MainWindow : Window
         _machine.StateChanged += OnStateChanged;
         Closed += (_, _) =>
         {
-            _frameTimer.Stop();
+            StopFrames();
             _awayTimer.Stop();
             _reminderTimer.Stop();
             _updateCheckTimer.Stop();
@@ -248,6 +251,10 @@ public sealed partial class MainWindow : Window
     {
         Panel.Width = _expandedSize.Width;
         Panel.Height = _expandedSize.Height;
+        Side.Width = _sideWidth;
+        Side.Height = _expandedSize.Height;
+        Side.Margin = new Thickness(_expandedSize.Width, 0, 0, 0);
+        SideDivider.Margin = new Thickness(_expandedSize.Width, 14, 0, 14);
     }
 
     private void OnGripPressed(object sender, PointerRoutedEventArgs e)
@@ -301,7 +308,7 @@ public sealed partial class MainWindow : Window
         _expandedSize = size;
         _current = size;
         ApplyPanelSize();
-        _host.Apply(_current);
+        _host.Apply(_current, _side);
         UpdateContent();
     }
 
@@ -379,11 +386,19 @@ public sealed partial class MainWindow : Window
                 Start(_expandedSize, PillAnimator.ExpandDuration);
                 break;
             case PillState.Collapsing:
+                if (_settingsOpen || _side > 0)
+                {
+                    _settingsOpen = false;
+                    StartSide(0); // the settings panel closes together with the pill
+                }
+
                 Start(PillAnimator.RestingSize, PillAnimator.CollapseDuration);
                 break;
             case PillState.Resting:
-                Panel.ShowTasks();
                 Panel.ClearNudge();
+                _settingsOpen = false;
+                _side = 0;
+                _sideAnimator = null;
                 _awayTimer.Stop();
                 _host.SetNoActivate(true);
                 break;
@@ -396,30 +411,102 @@ public sealed partial class MainWindow : Window
         _animator = new PillAnimator(_current, target, duration);
         _frames = 0;
         _clock.Restart();
-        _frameTimer.Start();
+        StartFrames();
     }
 
-    private void OnFrame(DispatcherQueueTimer sender, object args)
+    // ----- settings side panel -----
+
+    private void ToggleSettings()
     {
-        if (_animator is null)
+        if (_machine.State != PillState.Expanded)
         {
-            _frameTimer.Stop();
             return;
         }
 
-        var elapsed = _clock.Elapsed;
-        _frames++;
-        _current = _animator.Sample(elapsed);
-        _host.Apply(_current);
+        _settingsOpen = !_settingsOpen;
+        if (_settingsOpen)
+        {
+            _sideWidth = ExpandedSizing.SideWidth(_expandedSize, _host.AvailableSizeDip);
+            ApplyPanelSize();
+        }
+
+        StartSide(_settingsOpen ? _sideWidth : 0);
+        Log.Info(_settingsOpen ? "Settings opened" : "Settings closed");
+    }
+
+    private void OnSettingsClose() => ToggleSettings();
+
+    private void StartSide(double target)
+    {
+        _sideAnimator = new PillAnimator(new SizeD(_side, 0), new SizeD(target, 0), PillAnimator.SideDuration);
+        _sideClock.Restart();
+        StartFrames();
+    }
+
+    // Driven by the compositor's frame event rather than a timer: one update per displayed frame, so the window
+    // is never resized twice between two frames (which shows up as flicker).
+    private void StartFrames()
+    {
+        if (!_rendering)
+        {
+            CompositionTarget.Rendering += OnFrame;
+            _rendering = true;
+        }
+    }
+
+    private void StopFrames()
+    {
+        if (_rendering)
+        {
+            CompositionTarget.Rendering -= OnFrame;
+            _rendering = false;
+        }
+    }
+
+    private void OnFrame(object? sender, object e)
+    {
+        if (_animator is null && _sideAnimator is null)
+        {
+            StopFrames();
+            return;
+        }
+
+        var pillDone = false;
+        if (_animator is { } a)
+        {
+            var elapsed = _clock.Elapsed;
+            _frames++;
+            _current = a.Sample(elapsed);
+            if (a.IsComplete(elapsed))
+            {
+                _animator = null;
+                pillDone = true;
+                Log.Info($"Animation finished: {_frames} frames in {elapsed.TotalMilliseconds:F0} ms, size {_current.Width:F0}x{_current.Height:F0}");
+            }
+        }
+
+        if (_sideAnimator is { } sa)
+        {
+            var elapsed = _sideClock.Elapsed;
+            _side = sa.Sample(elapsed).Width;
+            if (sa.IsComplete(elapsed))
+            {
+                _sideAnimator = null;
+            }
+        }
+
+        _host.Apply(_current, _side);
         UpdateContent();
 
-        if (_animator.IsComplete(elapsed))
+        if (pillDone)
         {
-            _frameTimer.Stop();
-            _animator = null;
-            Log.Info($"Animation finished: {_frames} frames in {elapsed.TotalMilliseconds:F0} ms, size {_current.Width:F0}x{_current.Height:F0}");
             _machine.CompleteAnimation(_machine.Generation);
             UpdateContent();
+        }
+
+        if (_animator is null && _sideAnimator is null)
+        {
+            StopFrames();
         }
     }
 
@@ -431,7 +518,14 @@ public sealed partial class MainWindow : Window
         RestingContent.IsHitTestVisible = _machine.State is PillState.Resting or PillState.Collapsing && t < 0.5;
         Panel.Opacity = Math.Clamp((t - 0.45) / 0.55, 0, 1);
         Panel.IsHitTestVisible = _machine.State is PillState.Expanded;
-        Grip.Opacity = Panel.Opacity;
-        Grip.IsHitTestVisible = _machine.State is PillState.Expanded;
+
+        var side = _sideWidth > 0 ? Math.Clamp(_side / _sideWidth, 0, 1) : 0;
+        Side.Opacity = Math.Clamp((side - 0.3) / 0.7, 0, 1);
+        SideDivider.Opacity = Side.Opacity;
+        Side.IsHitTestVisible = _settingsOpen && side > 0.9;
+
+        // The grip resizes around the pill's center, which no longer holds while the side panel is out.
+        Grip.Opacity = Panel.Opacity * (1 - side);
+        Grip.IsHitTestVisible = _machine.State is PillState.Expanded && !_settingsOpen && side == 0;
     }
 }
