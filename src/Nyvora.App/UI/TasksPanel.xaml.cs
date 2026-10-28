@@ -179,7 +179,7 @@ public sealed partial class TasksPanel : UserControl
                 {
                     Text = "#",
                     FontSize = 14,
-                    FontWeight = FontWeights.SemiBold,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                     Foreground = itemTags.Count > 0 ? new SolidColorBrush(TagVisuals.Of(itemTags[0].Color)) : MutedBrush,
                     Opacity = itemTags.Count > 0 ? 1 : 0.55,
                 },
