@@ -522,25 +522,82 @@ public sealed partial class TasksPanel : UserControl
     {
         if (e.Key == VirtualKey.Enter)
         {
-            AddFromInput(ReminderPreset.None);
+            AddFromInput();
             e.Handled = true;
         }
     }
 
-    private void OnAddWithReminder(object sender, RoutedEventArgs e)
+    // The reminder chosen next to the input applies to the next task added, then resets.
+    private ReminderPreset _pendingPreset = ReminderPreset.None;
+    private DateTimeOffset? _pendingAt;
+
+    private void OnReminderButtonClick(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { Tag: string tag } && Enum.TryParse<ReminderPreset>(tag, out var preset))
+        var opening = ReminderPicker.Visibility == Visibility.Collapsed;
+        ReminderPicker.Visibility = opening ? Visibility.Visible : Visibility.Collapsed;
+        if (opening)
         {
-            AddFromInput(preset);
+            var now = DateTimeOffset.Now;
+            var next = now.AddMinutes(15 - now.Minute % 15);
+            PickerTime.Time = new TimeSpan(next.Hour, next.Minute, 0);
+            PickerClear.IsEnabled = _pendingPreset != ReminderPreset.None || _pendingAt is not null;
         }
     }
 
-    private void AddFromInput(ReminderPreset preset)
+    private void OnPickPreset(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string tag } && Enum.TryParse<ReminderPreset>(tag, out var preset))
+        {
+            Arm(preset, null);
+        }
+    }
+
+    private void OnPickerSet(object sender, RoutedEventArgs e)
+    {
+        var t = PickerTime.Time;
+        if (Reminders.TryParseClock($"{t.Hours}:{t.Minutes:00}", DateTimeOffset.Now, out var at))
+        {
+            Arm(ReminderPreset.None, at);
+        }
+    }
+
+    private void OnPickClear(object sender, RoutedEventArgs e) => Arm(ReminderPreset.None, null);
+
+    private void Arm(ReminderPreset preset, DateTimeOffset? at)
+    {
+        _pendingPreset = preset;
+        _pendingAt = at;
+        ReminderPicker.Visibility = Visibility.Collapsed;
+        UpdateReminderButton();
+        Input.Focus(FocusState.Programmatic);
+    }
+
+    private void UpdateReminderButton()
+    {
+        var armed = _pendingPreset != ReminderPreset.None || _pendingAt is not null;
+        ReminderLabel.Text = _pendingAt is { } at
+            ? "⏰ " + Reminders.FormatDue(at, DateTimeOffset.Now)
+            : _pendingPreset switch
+            {
+                ReminderPreset.InTenMinutes => "⏰ 10 min",
+                ReminderPreset.InOneHour => "⏰ 1 hour",
+                ReminderPreset.TomorrowMorning => "⏰ Tomorrow",
+                _ => "⏰",
+            };
+        ReminderLabel.Foreground = armed ? DueBrush : TextBrush;
+        ToolTipService.SetToolTip(ReminderButton, armed ? "Reminder for the next task (click to change)" : "Add a reminder to the next task");
+    }
+
+    private void AddFromInput()
     {
         var now = DateTimeOffset.Now;
-        if (_tasks.Add(Input.Text, now, Reminders.Resolve(preset, now)) is not null)
+        var remindAt = _pendingAt ?? Reminders.Resolve(_pendingPreset, now);
+        if (_tasks.Add(Input.Text, now, remindAt) is not null)
         {
             Input.Text = "";
+            _pendingPreset = ReminderPreset.None;
+            _pendingAt = null;
+            UpdateReminderButton();
         }
 
         Input.Focus(FocusState.Programmatic);
