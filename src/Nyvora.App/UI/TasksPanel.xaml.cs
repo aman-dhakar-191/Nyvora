@@ -323,6 +323,7 @@ public sealed partial class TasksPanel : UserControl
         var error = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
         var name = new TextBox { PlaceholderText = "New tag", MaxLength = TagSet.MaxNameLength };
         ClipboardText.Attach(name);
+        name.Loaded += (_, _) => name.StartBringIntoView(); // the list area is small; keep the editor visible
 
         void AddTag()
         {
