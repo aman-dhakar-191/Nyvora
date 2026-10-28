@@ -7,6 +7,58 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!--
+              Nyvora's look: one dark surface (#0B0B10), flat controls one step lighter, hairline borders,
+              8 px corners everywhere, a single teal accent. These override the stock WinUI theme keys so every
+              control (including the ones the app creates in code) picks them up.
+            -->
+            <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">10</CornerRadius>
+            <Thickness x:Key="TextControlBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#FF15151D" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF1F1F2A" />
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF272734" />
+                    <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="#FF111117" />
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#14FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#22FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#14FFFFFF" />
+                    <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="#0AFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonForeground" Color="#FFE7E7EE" />
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFE7E7EE" />
+                    <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="#FF55556A" />
+
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#FF13131A" />
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FF16161F" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FF16161F" />
+                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="#14FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#22FFFFFF" />
+                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#FF5EEAD4" />
+                    <SolidColorBrush x:Key="TextControlForeground" Color="#FFF4F4F8" />
+                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#FFF4F4F8" />
+                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#FF6E6E85" />
+                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#FF8A8AA0" />
+                    <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#FF6E6E85" />
+
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#66FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="#B3FFFFFF" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="#FF5EEAD4" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="#FF7DF0DD" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPressed" Color="#FF48D1BC" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeChecked" Color="#FF5EEAD4" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" Color="#FF7DF0DD" />
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" Color="#FF48D1BC" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#FF0B0B10" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#FF0B0B10" />
+                    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#FF0B0B10" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

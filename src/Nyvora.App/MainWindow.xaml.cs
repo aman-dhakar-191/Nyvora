@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
     private double _sideWidth; // width it has when fully open
     private bool _passiveExpand;
     private int _frames;
+    private bool _focusInputWhenOpen;
 
     public MainWindow()
     {
@@ -375,6 +376,7 @@ public sealed partial class MainWindow : Window
                 else
                 {
                     _host.Focus();
+                    _focusInputWhenOpen = true; // ready to type the moment it has opened
                 }
 
                 _host.ResetClickTracking();
@@ -502,6 +504,11 @@ public sealed partial class MainWindow : Window
         {
             _machine.CompleteAnimation(_machine.Generation);
             UpdateContent();
+            if (_focusInputWhenOpen && _machine.State == PillState.Expanded)
+            {
+                _focusInputWhenOpen = false;
+                Panel.FocusInput();
+            }
         }
 
         if (_animator is null && _sideAnimator is null)

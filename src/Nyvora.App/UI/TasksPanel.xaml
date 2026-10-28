@@ -5,7 +5,7 @@
     xmlns:ui="using:Nyvora.App.UI"
     RequestedTheme="Dark">
 
-    <Grid x:Name="TasksView" Padding="24,18,24,14" RowSpacing="10">
+    <Grid x:Name="TasksView" Padding="22,18,22,14" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -14,22 +14,25 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Header: title with a quiet count underneath, icon-only actions on the right. -->
         <Grid>
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <Ellipse Width="10" Height="10" Fill="#FF5EEAD4" VerticalAlignment="Center" />
-                <TextBlock Text="Tasks" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+            <StackPanel Spacing="1">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Ellipse Width="10" Height="10" Fill="#FF5EEAD4" VerticalAlignment="Center" />
+                    <TextBlock Text="Tasks" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+                </StackPanel>
+                <TextBlock x:Name="Summary" FontSize="12" Foreground="#FF8A8AA0" Margin="20,0,0,0" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <TextBlock x:Name="Summary" FontSize="12" Foreground="#FF9A9AB0" VerticalAlignment="Center" />
-                <ui:HandButton Click="OnSettingsClick" Padding="6" BorderThickness="0" Background="Transparent"
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <ui:HandButton Click="OnSettingsClick" Padding="7" BorderThickness="0" Background="Transparent"
                                ToolTipService.ToolTip="Settings">
                     <FontIcon Glyph="&#xE713;" FontSize="14" />
                 </ui:HandButton>
-                <ui:HandButton Click="OnCollapse" Padding="6" BorderThickness="0" Background="Transparent"
+                <ui:HandButton Click="OnCollapse" Padding="7" BorderThickness="0" Background="Transparent"
                                ToolTipService.ToolTip="Collapse (Esc)">
                     <FontIcon Glyph="&#xE70E;" FontSize="14" />
                 </ui:HandButton>
-                <ui:HandButton Click="OnQuit" Padding="6" BorderThickness="0" Background="Transparent"
+                <ui:HandButton Click="OnQuit" Padding="7" BorderThickness="0" Background="Transparent"
                                ToolTipService.ToolTip="Quit Nyvora">
                     <FontIcon Glyph="&#xE7E8;" FontSize="14" />
                 </ui:HandButton>
@@ -41,9 +44,9 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="Input" PlaceholderText="Add a task, press Enter" MaxLength="200"
-                     KeyDown="OnInputKeyDown" />
-            <ui:HandButton x:Name="ReminderButton" Grid.Column="1" Click="OnReminderButtonClick" MinHeight="32"
+            <TextBox x:Name="Input" PlaceholderText="Add a task, press Enter" MaxLength="200" MinHeight="38"
+                     VerticalContentAlignment="Center" Padding="12,0" KeyDown="OnInputKeyDown" />
+            <ui:HandButton x:Name="ReminderButton" Grid.Column="1" Click="OnReminderButtonClick" MinHeight="38" MinWidth="44"
                            ToolTipService.ToolTip="Add a reminder to the next task">
                 <TextBlock x:Name="ReminderLabel" Text="⏰" FontSize="13" />
             </ui:HandButton>

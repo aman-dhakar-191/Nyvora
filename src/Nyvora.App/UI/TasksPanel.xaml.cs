@@ -101,27 +101,73 @@ public sealed partial class TasksPanel : UserControl
             });
         }
 
-        foreach (var item in _tasks.Ordered())
+        var ordered = _tasks.Ordered();
+        var open = ordered.Where(t => !t.Done).ToList();
+        var done = ordered.Where(t => t.Done).ToList();
+
+        foreach (var item in open)
         {
             Rows.Children.Add(BuildRow(item, now));
         }
 
-        if (_tasks.Items.Count == 0 && _nudge is null)
+        if (open.Count == 0 && _nudge is null)
         {
             Rows.Children.Add(new TextBlock
             {
-                Text = "Nothing yet. Add your first task above.",
+                Text = done.Count == 0 ? "Nothing here yet. Add your first task above." : "All clear. Nice work.",
                 Foreground = MutedBrush,
                 FontSize = 13,
-                Margin = new Thickness(0, 8, 0, 0),
+                Margin = new Thickness(2, 10, 0, 6),
             });
         }
+
+        if (done.Count > 0)
+        {
+            // Finished tasks stay out of the way until asked for.
+            var toggle = new HandButton
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    Children =
+                    {
+                        new FontIcon { Glyph = _showDone ? "\uE70E" : "\uE70D", FontSize = 10, Foreground = MutedBrush },
+                        new TextBlock { Text = $"Done · {done.Count}", FontSize = 12, Foreground = MutedBrush },
+                    },
+                },
+                Padding = new Thickness(6, 3, 8, 3),
+                MinHeight = 0,
+                Margin = new Thickness(0, 6, 0, 2),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            toggle.Click += (_, _) =>
+            {
+                _showDone = !_showDone;
+                Refresh();
+            };
+            Rows.Children.Add(toggle);
+
+            if (_showDone)
+            {
+                foreach (var item in done)
+                {
+                    Rows.Children.Add(BuildRow(item, now));
+                }
+            }
+        }
     }
+
+    private bool _showDone;
 
     private UIElement BuildRow(TaskItem item, DateTimeOffset now)
     {
         var isDue = TaskList.IsDue(item, now);
-        var row = new Grid { ColumnSpacing = 6, MinHeight = 34 };
+        // Secondary actions stay invisible (but keep their space, so nothing shifts) until the row is hovered or focused.
+        var reveal = new List<UIElement>();
+        var row = new Grid { ColumnSpacing = 6, MinHeight = 36 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -165,12 +211,20 @@ public sealed partial class TasksPanel : UserControl
             title.TextTrimming = TextTrimming.None;
             title.TextWrapping = TextWrapping.Wrap;
             row.Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF));
+            foreach (var el in reveal)
+            {
+                el.Opacity = 1;
+            }
         };
         row.PointerExited += (_, _) =>
         {
             title.TextWrapping = TextWrapping.NoWrap;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
             row.Background = new SolidColorBrush(Colors.Transparent);
+            foreach (var el in reveal)
+            {
+                el.Opacity = 0;
+            }
         };
 
         var itemTags = _tasks.TagsOf(item);
@@ -202,6 +256,10 @@ public sealed partial class TasksPanel : UserControl
             };
             Grid.SetColumn(tagButton, 3);
             row.Children.Add(tagButton);
+            if (itemTags.Count == 0 && _editingTags != item.Id)
+            {
+                reveal.Add(tagButton);
+            }
         }
 
         if (!item.Done)
@@ -231,6 +289,10 @@ public sealed partial class TasksPanel : UserControl
             };
             Grid.SetColumn(when, 4);
             row.Children.Add(when);
+            if (item.RemindAt is null && _editingReminder != item.Id)
+            {
+                reveal.Add(when);
+            }
         }
 
         if (isDue)
@@ -261,6 +323,13 @@ public sealed partial class TasksPanel : UserControl
         delete.Click += (_, _) => _tasks.Remove(item.Id);
         Grid.SetColumn(delete, 6);
         row.Children.Add(delete);
+        reveal.Add(delete);
+
+        foreach (var el in reveal)
+        {
+            el.Opacity = 0;
+            el.GotFocus += (_, _) => el.Opacity = 1; // keyboard users still find them
+        }
 
         var stack = new StackPanel { Spacing = 2 };
         stack.Children.Add(row);
