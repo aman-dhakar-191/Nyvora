@@ -55,9 +55,10 @@ public sealed partial class TasksPanel : UserControl
         }
     }
 
-    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses, bool statusReminder)
+    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses, TagSet tags, bool statusReminder)
     {
-        Settings.Attach(statuses, updates, alwaysOnTop, statusReminder);
+        Settings.Attach(statuses, tags, updates, alwaysOnTop, statusReminder);
+        tags.Changed += Refresh;
         statuses.Changed += Refresh;
         _tasks.Changed -= Refresh;
         _tasks = tasks;
@@ -146,6 +147,7 @@ public sealed partial class TasksPanel : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var check = new HandCheckBox { IsChecked = item.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
         check.Click += (_, _) => _tasks.Toggle(item.Id);
@@ -166,6 +168,37 @@ public sealed partial class TasksPanel : UserControl
         };
         Grid.SetColumn(title, 2);
         row.Children.Add(title);
+
+        var itemTags = _tasks.TagsOf(item);
+        if (!item.Done)
+        {
+            // A quiet "#" until the task has tags; opens the inline tag picker.
+            var tagButton = new HandButton
+            {
+                Content = new TextBlock
+                {
+                    Text = "#",
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = itemTags.Count > 0 ? new SolidColorBrush(TagVisuals.Of(itemTags[0].Color)) : MutedBrush,
+                    Opacity = itemTags.Count > 0 ? 1 : 0.55,
+                },
+                Padding = new Thickness(6, 2, 6, 2),
+                MinHeight = 0,
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTipService.SetToolTip(tagButton, "Tags");
+            tagButton.Click += (_, _) =>
+            {
+                _editingTags = _editingTags == item.Id ? null : item.Id;
+                _editingReminder = null;
+                Refresh();
+            };
+            Grid.SetColumn(tagButton, 3);
+            row.Children.Add(tagButton);
+        }
 
         if (!item.Done)
         {
@@ -189,9 +222,10 @@ public sealed partial class TasksPanel : UserControl
             when.Click += (_, _) =>
             {
                 _editingReminder = _editingReminder == item.Id ? null : item.Id;
+                _editingTags = null;
                 Refresh();
             };
-            Grid.SetColumn(when, 3);
+            Grid.SetColumn(when, 4);
             row.Children.Add(when);
         }
 
@@ -208,7 +242,7 @@ public sealed partial class TasksPanel : UserControl
             };
             ToolTipService.SetToolTip(snooze, $"Snooze {(int)Reminders.SnoozeDuration.TotalMinutes} minutes");
             snooze.Click += (_, _) => _tasks.Snooze(item.Id, DateTimeOffset.Now, Reminders.SnoozeDuration);
-            Grid.SetColumn(snooze, 4);
+            Grid.SetColumn(snooze, 5);
             row.Children.Add(snooze);
         }
 
@@ -221,21 +255,127 @@ public sealed partial class TasksPanel : UserControl
         };
         ToolTipService.SetToolTip(delete, "Delete task");
         delete.Click += (_, _) => _tasks.Remove(item.Id);
-        Grid.SetColumn(delete, 5);
+        Grid.SetColumn(delete, 6);
         row.Children.Add(delete);
 
-        if (_editingReminder == item.Id && !item.Done)
+        var stack = new StackPanel { Spacing = 2 };
+        stack.Children.Add(row);
+
+        if (itemTags.Count > 0)
         {
-            var stack = new StackPanel { Spacing = 2 };
-            stack.Children.Add(row);
-            stack.Children.Add(BuildReminderEditor(item));
-            return stack;
+            // Under the title; long lists collapse into "+N" so the row never grows sideways.
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(30, 0, 0, 2) };
+            foreach (var tag in itemTags.Take(4))
+            {
+                line.Children.Add(TagVisuals.Chip(tag));
+            }
+
+            if (itemTags.Count > 4)
+            {
+                line.Children.Add(new TextBlock { Text = $"+{itemTags.Count - 4}", FontSize = 11, Foreground = MutedBrush, VerticalAlignment = VerticalAlignment.Center });
+            }
+
+            stack.Children.Add(line);
         }
 
-        return row;
+        if (!item.Done && _editingReminder == item.Id)
+        {
+            stack.Children.Add(BuildReminderEditor(item));
+        }
+
+        if (!item.Done && _editingTags == item.Id)
+        {
+            stack.Children.Add(BuildTagEditor(item));
+        }
+
+        return stack;
     }
 
     private Guid? _editingReminder;
+    private Guid? _editingTags;
+
+    private UIElement BuildTagEditor(TaskItem item)
+    {
+        var box = new StackPanel { Spacing = 6 };
+
+        if (_tasks.Tags.Items.Count == 0)
+        {
+            box.Children.Add(new TextBlock { Text = "No tags yet. Create your first one below.", FontSize = 12, Foreground = MutedBrush });
+        }
+        else
+        {
+            var list = new StackPanel { Spacing = 2 };
+            foreach (var tag in _tasks.Tags.Items)
+            {
+                var check = new HandCheckBox
+                {
+                    IsChecked = item.TagIds.Contains(tag.Id),
+                    MinWidth = 0,
+                    Content = new TextBlock { Text = "#" + tag.Name, FontSize = 13, Foreground = new SolidColorBrush(TagVisuals.Of(tag.Color)) },
+                };
+                check.Click += (_, _) => _tasks.ToggleTag(item.Id, tag.Id);
+                list.Children.Add(check);
+            }
+
+            box.Children.Add(new ScrollViewer { Content = list, MaxHeight = 110, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        }
+
+        var error = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        var name = new TextBox { PlaceholderText = "New tag", MaxLength = TagSet.MaxNameLength };
+        ClipboardText.Attach(name);
+
+        void AddTag()
+        {
+            var created = _tasks.Tags.TryAdd(name.Text, out var message);
+            if (created is null)
+            {
+                error.Text = message ?? "";
+                error.Visibility = Visibility.Visible;
+                return;
+            }
+
+            _tasks.ToggleTag(item.Id, created.Id); // a tag created from a task is also put on that task
+        }
+
+        name.KeyDown += (_, e) =>
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                AddTag();
+                e.Handled = true;
+            }
+        };
+
+        var add = new HandButton { Content = "Add", FontSize = 12, Padding = new Thickness(10, 4, 10, 4) };
+        add.Click += (_, _) => AddTag();
+        var done = new HandButton { Content = "Done", FontSize = 12, Padding = new Thickness(10, 4, 10, 4) };
+        done.Click += (_, _) =>
+        {
+            _editingTags = null;
+            Refresh();
+        };
+
+        var newRow = new Grid { ColumnSpacing = 6 };
+        newRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        newRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        newRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        newRow.Children.Add(name);
+        Grid.SetColumn(add, 1);
+        newRow.Children.Add(add);
+        Grid.SetColumn(done, 2);
+        newRow.Children.Add(done);
+        box.Children.Add(newRow);
+        box.Children.Add(error);
+
+        return new Border
+        {
+            Margin = new Thickness(30, 0, 0, 6),
+            Padding = new Thickness(10, 8, 10, 8),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+            Child = box,
+        };
+    }
 
     private UIElement BuildReminderEditor(TaskItem item)
     {

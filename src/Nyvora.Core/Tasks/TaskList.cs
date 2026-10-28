@@ -8,14 +8,43 @@ public sealed class TaskList
     private readonly List<TaskItem> _items;
     private readonly StatusSet _statuses;
 
-    public TaskList(IEnumerable<TaskItem>? items = null, StatusSet? statuses = null)
+    private readonly TagSet _tags;
+
+    public TaskList(IEnumerable<TaskItem>? items = null, StatusSet? statuses = null, TagSet? tags = null)
     {
         _items = items is null ? new List<TaskItem>() : new List<TaskItem>(items);
         _statuses = statuses ?? new StatusSet();
-        Normalize(); // migrates files from before statuses existed
+        _tags = tags ?? new TagSet();
+        Normalize(); // migrates files from before statuses and tags existed
     }
 
     public StatusSet Statuses => _statuses;
+
+    public TagSet Tags => _tags;
+
+    /// <summary>The task's tags in the user's tag order.</summary>
+    public IReadOnlyList<TagDef> TagsOf(TaskItem item) => _tags.Items.Where(t => item.TagIds.Contains(t.Id)).ToList();
+
+    /// <summary>Adds the tag to the task, or removes it if already there.</summary>
+    public bool ToggleTag(Guid id, string tagId)
+    {
+        var item = Find(id);
+        if (item is null || _tags.Find(tagId) is null)
+        {
+            return false;
+        }
+
+        if (!item.TagIds.Remove(tagId))
+        {
+            item.TagIds.Add(tagId);
+        }
+
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Drops references to tags that were deleted.</summary>
+    public void ApplyTags() => ApplyStatuses();
 
     public StatusDef StatusOf(TaskItem item) =>
         _statuses.Find(item.StatusId) ?? (item.Done ? _statuses.FirstDone : _statuses.FirstOpen);
@@ -39,6 +68,14 @@ public sealed class TaskList
             {
                 item.StatusId = s.Id;
                 item.Done = s.IsDone;
+                changed = true;
+            }
+
+            item.TagIds ??= new List<string>();
+            var kept = item.TagIds.Where(t => _tags.Find(t) is not null).Distinct().ToList();
+            if (kept.Count != item.TagIds.Count)
+            {
+                item.TagIds = kept;
                 changed = true;
             }
         }

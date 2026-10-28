@@ -24,6 +24,9 @@ public sealed class AppSettings
 
     public double ExpandedHeight { get; set; }
 
+    /// <summary>User-defined tags (name and color). Validated by <see cref="TagSet"/>.</summary>
+    public List<TagDef> Tags { get; set; } = new();
+
     public DateTimeOffset? LastUpdateCheck { get; set; }
 
     public bool IsUpdateCheckDue(DateTimeOffset now) =>

@@ -47,6 +47,11 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
+                    <TextBlock Text="Tags" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
+                    <ui:TagSettingsView x:Name="TagsEditor" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
                     <TextBlock Text="Task statuses" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
                     <ui:StatusSettingsView x:Name="Statuses" />
                 </StackPanel>

@@ -1,0 +1,24 @@
+<UserControl
+    x:Class="Nyvora.App.UI.TagSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:Nyvora.App.UI">
+
+    <StackPanel Spacing="8">
+        <TextBlock FontSize="12" Foreground="#FF9A9AB0" TextWrapping="Wrap"
+                   Text="Tags label your tasks. Create them here or from the # button on a task. Click a color to change it." />
+
+        <StackPanel x:Name="Rows" Spacing="4" />
+
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="NewName" PlaceholderText="New tag name" MaxLength="20" KeyDown="OnNewKeyDown" />
+            <ui:HandButton Grid.Column="1" Content="Add" Click="OnAdd" />
+        </Grid>
+
+        <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FFFB7185" TextWrapping="Wrap" Visibility="Collapsed" />
+    </StackPanel>
+</UserControl>

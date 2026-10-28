@@ -27,6 +27,7 @@ public sealed partial class MainWindow : Window
     private readonly JsonTaskStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json"));
     private readonly StatusSet _statuses;
+    private readonly TagSet _tags;
     private readonly TaskList _tasks;
     private readonly SettingsStore _settings = new();
     private readonly UpdateService _updates;
@@ -52,7 +53,14 @@ public sealed partial class MainWindow : Window
         Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnRootPointerPressed), true);
 
         _statuses = new StatusSet(_settings.Current.Statuses);
-        _tasks = new TaskList(LoadTasks(), _statuses);
+        _tags = new TagSet(_settings.Current.Tags);
+        _tasks = new TaskList(LoadTasks(), _statuses, _tags);
+        _tags.Changed += () =>
+        {
+            _settings.Current.Tags = _tags.Export();
+            _settings.Save();
+            _tasks.ApplyTags(); // deleted tags disappear from tasks
+        };
         _statuses.Changed += () =>
         {
             _settings.Current.Statuses = _statuses.Export();
@@ -62,7 +70,7 @@ public sealed partial class MainWindow : Window
         _tasks.Changed += OnTasksChanged;
         _updates.Changed += UpdateBadge;
         _updates.RestartRequested += Close;
-        Panel.Attach(_tasks, _updates, _settings.Current.AlwaysOnTop, _statuses, _statusNudge.Enabled);
+        Panel.Attach(_tasks, _updates, _settings.Current.AlwaysOnTop, _statuses, _tags, _statusNudge.Enabled);
         Panel.StatusReminderChanged += on =>
         {
             var minutes = on ? 60 : 0;

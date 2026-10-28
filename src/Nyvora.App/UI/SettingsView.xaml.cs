@@ -18,8 +18,9 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? StatusReminderChanged;
 
-    internal void Attach(StatusSet statuses, UpdateService updates, bool alwaysOnTop, bool statusReminder)
+    internal void Attach(StatusSet statuses, TagSet tags, UpdateService updates, bool alwaysOnTop, bool statusReminder)
     {
+        TagsEditor.Attach(tags);
         TopToggle.IsChecked = alwaysOnTop;
         ReminderToggle.IsChecked = statusReminder;
         Statuses.Attach(statuses);

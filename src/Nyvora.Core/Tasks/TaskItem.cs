@@ -12,6 +12,9 @@ public sealed class TaskItem
     /// <summary>Id of a <see cref="StatusDef"/>. Null in files written before statuses existed; resolved from <see cref="Done"/>.</summary>
     public string? StatusId { get; set; }
 
+    /// <summary>Ids of the <see cref="TagDef"/>s on this task. Empty for files written before tags existed.</summary>
+    public List<string> TagIds { get; set; } = new();
+
     public DateTimeOffset Created { get; set; }
 
     public DateTimeOffset? RemindAt { get; set; }
