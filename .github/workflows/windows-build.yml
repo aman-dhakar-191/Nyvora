@@ -29,6 +29,11 @@ jobs:
       - name: Test
         run: dotnet test tests/Nyvora.Tests/Nyvora.Tests.csproj -c Release --no-restore
 
+      # Runs the real updater script (Windows PowerShell, as in production) against throwaway folders.
+      - name: Test update helper (backup and rollback)
+        shell: powershell
+        run: ./tests/update-helper/Test-UpdateHelper.ps1
+
       - name: Publish app (development artifact)
         run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 -p:Platform=x64 -o artifacts/Nyvora-win-x64
 
@@ -37,3 +42,18 @@ jobs:
           name: Nyvora-win-x64-dev
           path: artifacts/Nyvora-win-x64
           if-no-files-found: error
+
+      # Launches the real published app on the runner's desktop and drives it (click, type, Esc, Settings, Quit).
+      # Informational for now: it does not fail the build, but its results and screenshots are kept.
+      - name: Smoke test the running app
+        id: smoke
+        continue-on-error: true
+        shell: powershell
+        run: ./tests/smoke/Smoke.ps1 -Exe "$PWD\artifacts\Nyvora-win-x64\Nyvora.exe" -OutDir "$PWD\artifacts\smoke"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-screenshots
+          path: artifacts/smoke
+          if-no-files-found: ignore

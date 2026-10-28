@@ -19,6 +19,9 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Services\UpdateHelper.ps1" LogicalName="UpdateHelper.ps1" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Nyvora.Core\Nyvora.Core.csproj" />
   </ItemGroup>
 </Project>

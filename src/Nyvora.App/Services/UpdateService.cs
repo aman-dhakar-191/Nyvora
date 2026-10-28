@@ -25,17 +25,6 @@ internal sealed class UpdateService
 {
     private const long MaxPackageBytes = 400L * 1024 * 1024;
 
-    // Runs in a hidden Windows PowerShell after Nyvora exits. Parameters arrive via environment variables so no
-    // quoting of paths is needed and no script file (execution policy) is involved. Robocopy exit codes >= 8 are failures.
-    private const string HelperScript = @"
-$log = Join-Path (Split-Path (Split-Path $env:NYVORA_STAGE)) 'update.log'
-try {
-  Wait-Process -Id ([int]$env:NYVORA_PID) -Timeout 30 -ErrorAction SilentlyContinue
-  robocopy $env:NYVORA_STAGE $env:NYVORA_DEST /E /IS /IT /R:10 /W:1 /NFL /NDL /NP /NJH /NJS | Out-Null
-  if ($LASTEXITCODE -ge 8) { Add-Content $log ('copy failed, robocopy exit ' + $LASTEXITCODE) } else { Add-Content $log ('updated to ' + $env:NYVORA_TARGET) }
-} catch { Add-Content $log ($_ | Out-String) }
-Start-Process -FilePath $env:NYVORA_EXE";
-
     private static readonly HttpClient Http = CreateClient();
 
     private static readonly string NyvoraDir = Path.Combine(
@@ -173,12 +162,23 @@ Start-Process -FilePath $env:NYVORA_EXE";
             RestartRequested?.Invoke();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException
-                                       or InvalidDataException or UnauthorizedAccessException or Win32Exception)
+                                       or InvalidDataException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
         {
             Log.Error("Update install failed", ex);
             TryDelete(root);
             Set(UpdateState.Available, "Update failed. Try again");
         }
+    }
+
+    private static string LoadHelperScript()
+    {
+        // UpdateHelper.ps1 is embedded so the shipped script is exactly the one the CI tests run.
+        var assembly = typeof(UpdateService).Assembly;
+        var name = assembly.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("UpdateHelper.ps1", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("The update helper script is missing from this build.");
+        using var stream = assembly.GetManifestResourceStream(name)!;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     private static void Launch(string stage, UpdateInfo update)
@@ -191,13 +191,16 @@ Start-Process -FilePath $env:NYVORA_EXE";
         };
         psi.ArgumentList.Add("-NoProfile");
         psi.ArgumentList.Add("-NonInteractive");
-        psi.ArgumentList.Add("-Command");
-        psi.ArgumentList.Add(HelperScript);
+        psi.ArgumentList.Add("-EncodedCommand"); // base64 UTF-16: no quoting problems, and no script file for execution policy to block
+        psi.ArgumentList.Add(Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(LoadHelperScript())));
         psi.Environment["NYVORA_PID"] = Environment.ProcessId.ToString();
         psi.Environment["NYVORA_STAGE"] = stage;
         psi.Environment["NYVORA_DEST"] = AppContext.BaseDirectory.TrimEnd('\\', '/');
         psi.Environment["NYVORA_EXE"] = exe;
         psi.Environment["NYVORA_TARGET"] = update.Tag;
+        // Outside updates\<tag>: the new version clears that folder at startup, and the backup must outlive that.
+        psi.Environment["NYVORA_BACKUP"] = Path.Combine(NyvoraDir, "rollback");
+        psi.Environment["NYVORA_LOG"] = Path.Combine(UpdatesDir, "update.log");
         Process.Start(psi)?.Dispose();
     }
 
