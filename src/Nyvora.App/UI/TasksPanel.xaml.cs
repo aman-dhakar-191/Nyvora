@@ -169,6 +169,22 @@ public sealed partial class TasksPanel : UserControl
         Grid.SetColumn(title, 2);
         row.Children.Add(title);
 
+        // Hover shows the whole title, wrapped; leaving restores the trimmed single line.
+        row.Background = new SolidColorBrush(Colors.Transparent); // so the empty parts of the row get pointer events too
+        row.CornerRadius = new CornerRadius(6);
+        row.PointerEntered += (_, _) =>
+        {
+            title.TextTrimming = TextTrimming.None;
+            title.TextWrapping = TextWrapping.Wrap;
+            row.Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF));
+        };
+        row.PointerExited += (_, _) =>
+        {
+            title.TextWrapping = TextWrapping.NoWrap;
+            title.TextTrimming = TextTrimming.CharacterEllipsis;
+            row.Background = new SolidColorBrush(Colors.Transparent);
+        };
+
         var itemTags = _tasks.TagsOf(item);
         if (!item.Done)
         {
