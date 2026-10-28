@@ -5,7 +5,6 @@
     xmlns:ui="using:Nyvora.App.UI"
     RequestedTheme="Dark">
 
-    <Grid>
     <Grid x:Name="TasksView" Padding="24,18,24,14" RowSpacing="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -25,6 +24,14 @@
                 <ui:HandButton Click="OnSettingsClick" Padding="6" BorderThickness="0" Background="Transparent"
                                ToolTipService.ToolTip="Settings">
                     <FontIcon Glyph="&#xE713;" FontSize="14" />
+                </ui:HandButton>
+                <ui:HandButton Click="OnCollapse" Padding="6" BorderThickness="0" Background="Transparent"
+                               ToolTipService.ToolTip="Collapse (Esc)">
+                    <FontIcon Glyph="&#xE70E;" FontSize="14" />
+                </ui:HandButton>
+                <ui:HandButton Click="OnQuit" Padding="6" BorderThickness="0" Background="Transparent"
+                               ToolTipService.ToolTip="Quit Nyvora">
+                    <FontIcon Glyph="&#xE7E8;" FontSize="14" />
                 </ui:HandButton>
             </StackPanel>
         </Grid>
@@ -63,21 +70,9 @@
             <StackPanel x:Name="Rows" Spacing="2" />
         </ScrollViewer>
 
-        <Grid Grid.Row="4" ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Grid VerticalAlignment="Center">
-                <TextBlock x:Name="Hint" Text="Esc or click away to collapse" FontSize="12" Foreground="#FF6E6E85" />
-                <ui:HandButton x:Name="UpdateNotice" Visibility="Collapsed" Click="OnSettingsClick" Padding="8,3"
-                               FontSize="12" Foreground="#FF60A5FA" BorderThickness="0" Background="Transparent"
-                               HorizontalAlignment="Left" ToolTipService.ToolTip="Open settings to install" />
-            </Grid>
-            <ui:HandButton Grid.Column="1" Content="Collapse" Click="OnCollapse" />
-            <ui:HandButton Grid.Column="2" Content="Quit" Click="OnQuit" />
-        </Grid>
-    </Grid>
+        <!-- Only appears when an update is waiting; installing lives in Settings. -->
+        <ui:HandButton x:Name="UpdateNotice" Grid.Row="4" Visibility="Collapsed" Click="OnSettingsClick"
+                       Padding="8,3" FontSize="12" Foreground="#FF60A5FA" BorderThickness="0" Background="Transparent"
+                       HorizontalAlignment="Left" ToolTipService.ToolTip="Open settings to install" />
     </Grid>
 </UserControl>

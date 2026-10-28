@@ -77,7 +77,6 @@ public sealed partial class TasksPanel : UserControl
     {
         var available = _updates is { State: UpdateState.Available, Available: { } info } ? info : null;
         UpdateNotice.Visibility = available is null ? Visibility.Collapsed : Visibility.Visible;
-        Hint.Visibility = available is null ? Visibility.Visible : Visibility.Collapsed;
         UpdateNotice.Content = available is null ? "" : $"Update {available.Tag} available";
     }
 
