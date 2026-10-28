@@ -1,0 +1,48 @@
+<UserControl
+    x:Class="Nyvora.App.UI.StatusSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="using:Nyvora.App.UI">
+
+    <Grid Padding="24,18,24,14" RowSpacing="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <ui:HandButton Click="OnBack" Padding="8,4">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE72B;" FontSize="12" />
+                    <TextBlock Text="Back" />
+                </StackPanel>
+            </ui:HandButton>
+            <TextBlock Text="Task statuses" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="1" FontSize="12" Foreground="#FF9A9AB0" TextWrapping="Wrap"
+                   Text="Rename, reorder, add or remove. Tick Done for statuses that finish a task. Keep at least one done and one not done." />
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="Rows" Spacing="4" />
+        </ScrollViewer>
+
+        <Grid Grid.Row="3" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="NewName" PlaceholderText="New status name" MaxLength="24" KeyDown="OnNewKeyDown" />
+            <ui:HandCheckBox x:Name="NewDone" Grid.Column="1" Content="Done" MinWidth="0" />
+            <ui:HandButton Grid.Column="2" Content="Add" Click="OnAdd" />
+        </Grid>
+
+        <TextBlock x:Name="ErrorText" Grid.Row="4" FontSize="12" Foreground="#FFFB7185" MinHeight="16"
+                   TextWrapping="Wrap" />
+    </Grid>
+</UserControl>

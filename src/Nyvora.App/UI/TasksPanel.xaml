@@ -5,7 +5,8 @@
     xmlns:ui="using:Nyvora.App.UI"
     RequestedTheme="Dark">
 
-    <Grid Padding="24,18,24,14" RowSpacing="10">
+    <Grid>
+    <Grid x:Name="TasksView" Padding="24,18,24,14" RowSpacing="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -20,8 +21,13 @@
                 <Ellipse Width="10" Height="10" Fill="#FF5EEAD4" VerticalAlignment="Center" />
                 <TextBlock Text="Tasks" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
             </StackPanel>
-            <TextBlock x:Name="Summary" HorizontalAlignment="Right" VerticalAlignment="Center"
-                       FontSize="12" Foreground="#FF9A9AB0" />
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBlock x:Name="Summary" FontSize="12" Foreground="#FF9A9AB0" VerticalAlignment="Center" />
+                <ui:HandButton Click="OnSettingsClick" Padding="6" BorderThickness="0" Background="Transparent"
+                               ToolTipService.ToolTip="Task statuses">
+                    <FontIcon Glyph="&#xE713;" FontSize="14" />
+                </ui:HandButton>
+            </StackPanel>
         </Grid>
 
         <TextBox x:Name="Input" Grid.Row="1" PlaceholderText="Add a task, press Enter" MaxLength="200"
@@ -60,5 +66,7 @@
             <ui:HandButton Grid.Column="1" Content="Collapse" Click="OnCollapse" />
             <ui:HandButton Grid.Column="2" Content="Quit" Click="OnQuit" />
         </Grid>
+    </Grid>
+    <ui:StatusSettingsView x:Name="Settings" Visibility="Collapsed" BackRequested="OnSettingsBack" />
     </Grid>
 </UserControl>

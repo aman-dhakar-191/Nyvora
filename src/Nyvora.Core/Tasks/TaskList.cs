@@ -6,10 +6,66 @@ public sealed class TaskList
     public const int MaxTitleLength = 200;
 
     private readonly List<TaskItem> _items;
+    private readonly StatusSet _statuses;
 
-    public TaskList(IEnumerable<TaskItem>? items = null)
+    public TaskList(IEnumerable<TaskItem>? items = null, StatusSet? statuses = null)
     {
         _items = items is null ? new List<TaskItem>() : new List<TaskItem>(items);
+        _statuses = statuses ?? new StatusSet();
+        Normalize(); // migrates files from before statuses existed
+    }
+
+    public StatusSet Statuses => _statuses;
+
+    public StatusDef StatusOf(TaskItem item) =>
+        _statuses.Find(item.StatusId) ?? (item.Done ? _statuses.FirstDone : _statuses.FirstOpen);
+
+    /// <summary>Re-syncs every task with the current statuses, e.g. after one was removed or its "done" flag changed.</summary>
+    public void ApplyStatuses()
+    {
+        if (Normalize())
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    private bool Normalize()
+    {
+        var changed = false;
+        foreach (var item in _items)
+        {
+            var s = StatusOf(item);
+            if (item.StatusId != s.Id || item.Done != s.IsDone)
+            {
+                item.StatusId = s.Id;
+                item.Done = s.IsDone;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    public bool SetStatus(Guid id, string statusId)
+    {
+        var item = Find(id);
+        var s = _statuses.Find(statusId);
+        if (item is null || s is null)
+        {
+            return false;
+        }
+
+        item.StatusId = s.Id;
+        item.Done = s.IsDone;
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Moves the task to the next status in the user's order, wrapping around.</summary>
+    public bool CycleStatus(Guid id)
+    {
+        var item = Find(id);
+        return item is not null && SetStatus(id, _statuses.Next(StatusOf(item).Id).Id);
     }
 
     public event Action? Changed;
@@ -36,7 +92,7 @@ public sealed class TaskList
             title = title[..MaxTitleLength];
         }
 
-        var item = new TaskItem { Id = Guid.NewGuid(), Title = title, Created = now, RemindAt = remindAt };
+        var item = new TaskItem { Id = Guid.NewGuid(), Title = title, Created = now, RemindAt = remindAt, StatusId = _statuses.FirstOpen.Id };
         _items.Add(item);
         Changed?.Invoke();
         return item;
@@ -50,7 +106,10 @@ public sealed class TaskList
             return false;
         }
 
-        item.Done = !item.Done;
+        // The checkbox: finish an open task, reopen a finished one.
+        var target = item.Done ? _statuses.FirstOpen : _statuses.FirstDone;
+        item.StatusId = target.Id;
+        item.Done = target.IsDone;
         Changed?.Invoke();
         return true;
     }

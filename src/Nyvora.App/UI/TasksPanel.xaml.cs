@@ -30,9 +30,11 @@ public sealed partial class TasksPanel : UserControl
 
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
 
-    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop)
+    internal void Attach(TaskList tasks, UpdateService updates, bool alwaysOnTop, StatusSet statuses)
     {
         TopToggle.IsChecked = alwaysOnTop;
+        Settings.Attach(statuses);
+        statuses.Changed += Refresh;
         _tasks.Changed -= Refresh;
         _tasks = tasks;
         _tasks.Changed += Refresh;
@@ -47,6 +49,21 @@ public sealed partial class TasksPanel : UserControl
         _updates.Changed += RefreshUpdate;
         RefreshUpdate();
     }
+
+    /// <summary>Returns to the task list (used when the pill collapses so it always reopens on tasks).</summary>
+    public void ShowTasks()
+    {
+        Settings.Visibility = Visibility.Collapsed;
+        TasksView.Visibility = Visibility.Visible;
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        TasksView.Visibility = Visibility.Collapsed;
+        Settings.Visibility = Visibility.Visible;
+    }
+
+    private void OnSettingsBack() => ShowTasks();
 
     private void RefreshUpdate()
     {
@@ -121,6 +138,7 @@ public sealed partial class TasksPanel : UserControl
         var isDue = TaskList.IsDue(item, now);
         var row = new Grid { ColumnSpacing = 6, MinHeight = 34 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -129,6 +147,10 @@ public sealed partial class TasksPanel : UserControl
         var check = new HandCheckBox { IsChecked = item.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
         check.Click += (_, _) => _tasks.Toggle(item.Id);
         row.Children.Add(check);
+
+        var chip = BuildChip(item);
+        Grid.SetColumn(chip, 1);
+        row.Children.Add(chip);
 
         var title = new TextBlock
         {
@@ -139,7 +161,7 @@ public sealed partial class TasksPanel : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             TextDecorations = item.Done ? TextDecorations.Strikethrough : TextDecorations.None,
         };
-        Grid.SetColumn(title, 1);
+        Grid.SetColumn(title, 2);
         row.Children.Add(title);
 
         if (item.RemindAt is { } at && !item.Done)
@@ -151,7 +173,7 @@ public sealed partial class TasksPanel : UserControl
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            Grid.SetColumn(when, 2);
+            Grid.SetColumn(when, 3);
             row.Children.Add(when);
         }
 
@@ -159,7 +181,7 @@ public sealed partial class TasksPanel : UserControl
         {
             var snooze = new HandButton { Content = "Snooze", Padding = new Thickness(8, 2, 8, 2), FontSize = 12 };
             snooze.Click += (_, _) => _tasks.Snooze(item.Id, DateTimeOffset.Now, Reminders.SnoozeDuration);
-            Grid.SetColumn(snooze, 3);
+            Grid.SetColumn(snooze, 4);
             row.Children.Add(snooze);
         }
 
@@ -172,10 +194,41 @@ public sealed partial class TasksPanel : UserControl
         };
         ToolTipService.SetToolTip(delete, "Delete task");
         delete.Click += (_, _) => _tasks.Remove(item.Id);
-        Grid.SetColumn(delete, 4);
+        Grid.SetColumn(delete, 5);
         row.Children.Add(delete);
 
         return row;
+    }
+
+    // Done is green; open statuses take a colour by their position so neighbours are easy to tell apart.
+    private static readonly Color[] OpenColors =
+    {
+        Color.FromArgb(0xFF, 0x9A, 0x9A, 0xB0),
+        Color.FromArgb(0xFF, 0x60, 0xA5, 0xFA),
+        Color.FromArgb(0xFF, 0xA7, 0x8B, 0xFA),
+        Color.FromArgb(0xFF, 0xF4, 0x72, 0xB6),
+    };
+
+    private static readonly Color DoneColor = Color.FromArgb(0xFF, 0x4A, 0xDE, 0x80);
+
+    private UIElement BuildChip(TaskItem item)
+    {
+        var status = _tasks.StatusOf(item);
+        var color = status.IsDone ? DoneColor : OpenColors[Math.Max(0, _tasks.Statuses.IndexOf(status.Id)) % OpenColors.Length];
+        var chip = new HandButton
+        {
+            Content = new TextBlock { Text = status.Name, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 84 },
+            Padding = new Thickness(8, 2, 8, 2),
+            MinHeight = 0,
+            CornerRadius = new CornerRadius(10),
+            Foreground = new SolidColorBrush(color),
+            Background = new SolidColorBrush(Color.FromArgb(0x26, color.R, color.G, color.B)),
+            BorderThickness = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTipService.SetToolTip(chip, "Click to change status");
+        chip.Click += (_, _) => _tasks.CycleStatus(item.Id);
+        return chip;
     }
 
     private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)

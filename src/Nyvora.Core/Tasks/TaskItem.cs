@@ -6,7 +6,11 @@ public sealed class TaskItem
 
     public string Title { get; set; } = "";
 
+    /// <summary>Mirrors the task's status (<see cref="StatusDef.IsDone"/>); kept so older files and reminder logic keep working.</summary>
     public bool Done { get; set; }
+
+    /// <summary>Id of a <see cref="StatusDef"/>. Null in files written before statuses existed; resolved from <see cref="Done"/>.</summary>
+    public string? StatusId { get; set; }
 
     public DateTimeOffset Created { get; set; }
 

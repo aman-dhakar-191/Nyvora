@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Nyvora.Core.Tasks;
 
 namespace Nyvora.Core.Settings;
 
@@ -11,6 +12,9 @@ public sealed class AppSettings
 
     /// <summary>Keep the pill above other windows. Exclusive-fullscreen apps and games still cover it.</summary>
     public bool AlwaysOnTop { get; set; } = true;
+
+    /// <summary>User-defined task statuses (name and whether they count as done). Validated by <see cref="StatusSet"/>.</summary>
+    public List<StatusDef> Statuses { get; set; } = StatusSet.DefaultDefs();
 
     public DateTimeOffset? LastUpdateCheck { get; set; }
 
