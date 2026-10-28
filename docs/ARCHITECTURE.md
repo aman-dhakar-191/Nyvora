@@ -14,7 +14,7 @@ Valid transitions: `Resting→Expanding`, `Collapsing→Expanding`, `Expanding�
 
 - **Borderless:** `WS_POPUP` style with caption/frame bits removed; presenter border and title bar disabled.
 - **No taskbar/Alt+Tab:** `WS_EX_TOOLWINDOW`.
-- **No focus stealing:** `WS_EX_NOACTIVATE` while resting and `Show(activate:false)` at launch. It is lifted when the user expands the pill so Esc works, and restored when it returns to rest. Losing activation collapses the pill (click-away).
+- **No focus stealing:** `WS_EX_NOACTIVATE` while resting and `Show(activate:false)` at launch. It is lifted when the user expands the pill so Esc works, and restored when it returns to rest. Clicking outside the pill collapses it (polled mouse press); losing focus alone does not, so screenshot tools and Alt+Tab leave it open.
 - **Z-order:** `IsAlwaysOnTop`. This does not cover exclusive-fullscreen apps/games; no fullscreen detection yet.
 - **Click-through:** the window is exactly the pill's size, so it never covers unrelated desktop content; no transparent hit-test region exists.
 - **Rounded shape:** `SetWindowRgn` with a round-rect region updated every frame. Works on Windows 10 and 11 but edges are not anti-aliased. Fallback/alternative: layered window or composition-based shape (future).

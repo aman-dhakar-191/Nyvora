@@ -104,7 +104,6 @@ public sealed partial class MainWindow : Window
         };
 
         _machine.StateChanged += OnStateChanged;
-        Activated += OnActivated;
         Closed += (_, _) =>
         {
             _frameTimer.Stop();
@@ -226,14 +225,6 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnQuit(object sender, RoutedEventArgs e) => Close();
-
-    private void OnActivated(object sender, WindowActivatedEventArgs e)
-    {
-        if (e.WindowActivationState == WindowActivationState.Deactivated)
-        {
-            Collapse("window deactivated"); // fast path; the click poll covers cases where this never fires
-        }
-    }
 
     private void OnStateChanged(PillState previous, PillState next)
     {
