@@ -10,16 +10,16 @@ public class PillAnimatorTests
     [Fact]
     public void StartsAtFromAndEndsAtTo()
     {
-        var a = new PillAnimator(PillAnimator.RestingSize, PillAnimator.ExpandedSize, D);
+        var a = new PillAnimator(PillAnimator.RestingSize, PillAnimator.DefaultExpandedSize, D);
         Assert.Equal(PillAnimator.RestingSize, a.Sample(TimeSpan.Zero));
-        Assert.Equal(PillAnimator.ExpandedSize, a.Sample(D));
-        Assert.Equal(PillAnimator.ExpandedSize, a.Sample(D * 5));
+        Assert.Equal(PillAnimator.DefaultExpandedSize, a.Sample(D));
+        Assert.Equal(PillAnimator.DefaultExpandedSize, a.Sample(D * 5));
     }
 
     [Fact]
     public void IsMonotonicWhileExpanding()
     {
-        var a = new PillAnimator(PillAnimator.RestingSize, PillAnimator.ExpandedSize, D);
+        var a = new PillAnimator(PillAnimator.RestingSize, PillAnimator.DefaultExpandedSize, D);
         var last = 0.0;
         for (var ms = 0; ms <= 200; ms += 10)
         {
@@ -32,7 +32,7 @@ public class PillAnimatorTests
     [Fact]
     public void CompletionTracksDuration()
     {
-        var a = new PillAnimator(PillAnimator.RestingSize, PillAnimator.ExpandedSize, D);
+        var a = new PillAnimator(PillAnimator.RestingSize, PillAnimator.DefaultExpandedSize, D);
         Assert.False(a.IsComplete(TimeSpan.FromMilliseconds(199)));
         Assert.True(a.IsComplete(D));
     }
@@ -40,16 +40,16 @@ public class PillAnimatorTests
     [Fact]
     public void ExpansionProgressIsClamped()
     {
-        Assert.Equal(0, PillAnimator.ExpansionProgress(PillAnimator.RestingSize));
-        Assert.Equal(1, PillAnimator.ExpansionProgress(PillAnimator.ExpandedSize));
-        Assert.Equal(0, PillAnimator.ExpansionProgress(new SizeD(1, 1)));
-        Assert.Equal(1, PillAnimator.ExpansionProgress(new SizeD(9999, 1)));
+        Assert.Equal(0, PillAnimator.ExpansionProgress(PillAnimator.RestingSize, PillAnimator.DefaultExpandedSize));
+        Assert.Equal(1, PillAnimator.ExpansionProgress(PillAnimator.DefaultExpandedSize, PillAnimator.DefaultExpandedSize));
+        Assert.Equal(0, PillAnimator.ExpansionProgress(new SizeD(1, 1), PillAnimator.DefaultExpandedSize));
+        Assert.Equal(1, PillAnimator.ExpansionProgress(new SizeD(9999, 1), PillAnimator.DefaultExpandedSize));
     }
 
     [Fact]
     public void RejectsNonPositiveDuration()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => new PillAnimator(PillAnimator.RestingSize, PillAnimator.ExpandedSize, TimeSpan.Zero));
+            () => new PillAnimator(PillAnimator.RestingSize, PillAnimator.DefaultExpandedSize, TimeSpan.Zero));
     }
 }

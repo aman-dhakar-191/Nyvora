@@ -162,12 +162,14 @@ public class AppSettingsTests : IDisposable
     {
         var path = Path.Combine(_dir, "settings.json");
         var when = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
-        new AppSettings { AutoCheckUpdates = false, AlwaysOnTop = false, StatusReminderMinutes = 0, LastUpdateCheck = when }.Save(path);
+        new AppSettings { AutoCheckUpdates = false, AlwaysOnTop = false, StatusReminderMinutes = 0, ExpandedWidth = 512.5, ExpandedHeight = 480, LastUpdateCheck = when }.Save(path);
 
         var loaded = AppSettings.Load(path);
         Assert.False(loaded.AutoCheckUpdates);
         Assert.False(loaded.AlwaysOnTop);
         Assert.Equal(0, loaded.StatusReminderMinutes);
+        Assert.Equal(512.5, loaded.ExpandedWidth);
+        Assert.Equal(480, loaded.ExpandedHeight);
         Assert.Equal(when, loaded.LastUpdateCheck);
     }
 

@@ -61,6 +61,19 @@ internal sealed class PillWindowHost : IDisposable
         }
     }
 
+    /// <summary>The largest expanded size the primary display can hold (DIPs), leaving a margin and the taskbar free.</summary>
+    public SizeD AvailableSizeDip
+    {
+        get
+        {
+            var scale = Scale;
+            var display = DisplayArea.Primary;
+            return new SizeD(
+                display.OuterBounds.Width / scale - 32,
+                display.WorkArea.Height / scale - TopMarginDip - 8);
+        }
+    }
+
     public double Scale => GetDpiForWindow(_hwnd) / 96.0;
 
     public void Show()

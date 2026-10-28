@@ -16,6 +16,11 @@ public sealed class HandCheckBox : CheckBox
     public HandCheckBox() => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);
 }
 
+public sealed class ResizeGrip : Grid
+{
+    public ResizeGrip() => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeNorthwestSoutheast);
+}
+
 public sealed class HandGrid : Grid
 {
     public HandGrid() => ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Hand);

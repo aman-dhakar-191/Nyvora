@@ -34,6 +34,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _updateCheckTimer;
 
     private SizeD _current = PillAnimator.RestingSize;
+    private SizeD _expandedSize = PillAnimator.DefaultExpandedSize;
     private PillAnimator? _animator;
     private bool _passiveExpand;
     private int _frames;
@@ -44,6 +45,9 @@ public sealed partial class MainWindow : Window
         _updates = new UpdateService(_settings);
         _statusNudge = new RecurringNudge(TimeSpan.FromMinutes(_settings.Current.StatusReminderMinutes), DateTimeOffset.Now);
         _host = new PillWindowHost(this, _settings.Current.AlwaysOnTop);
+        _expandedSize = ExpandedSizing.FromSettings(
+            _settings.Current.ExpandedWidth, _settings.Current.ExpandedHeight, _host.AvailableSizeDip);
+        ApplyPanelSize();
         // handledEventsToo: buttons and text boxes mark PointerPressed handled, but they still need to pull focus.
         Root.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnRootPointerPressed), true);
 
@@ -222,6 +226,91 @@ public sealed partial class MainWindow : Window
             : AccentBrush;
     }
 
+    // ----- resizing -----
+
+    private bool _resizing;
+    private NativeMethods.POINT _resizeStartCursor;
+    private SizeD _resizeStartSize;
+
+    /// <summary>The panel keeps a fixed size (the target) so its layout never reflows while the window animates.</summary>
+    private void ApplyPanelSize()
+    {
+        Panel.Width = _expandedSize.Width;
+        Panel.Height = _expandedSize.Height;
+    }
+
+    private void OnGripPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_machine.State != PillState.Expanded || !NativeMethods.GetCursorPos(out _resizeStartCursor))
+        {
+            return;
+        }
+
+        _resizing = true;
+        _resizeStartSize = _expandedSize;
+        Grip.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void OnGripMoved(object sender, PointerRoutedEventArgs e)
+    {
+        // Screen coordinates, because the window itself moves while it is resized around the top-center anchor.
+        if (!_resizing || !NativeMethods.GetCursorPos(out var p))
+        {
+            return;
+        }
+
+        var scale = _host.Scale;
+        SetExpandedSize(ExpandedSizing.Resize(
+            _resizeStartSize,
+            (p.X - _resizeStartCursor.X) / scale,
+            (p.Y - _resizeStartCursor.Y) / scale,
+            _host.AvailableSizeDip));
+    }
+
+    private void OnGripReleased(object sender, PointerRoutedEventArgs e)
+    {
+        Grip.ReleasePointerCapture(e.Pointer);
+        EndResize();
+    }
+
+    private void OnGripCaptureLost(object sender, PointerRoutedEventArgs e) => EndResize();
+
+    private void OnGripDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (_machine.State == PillState.Expanded)
+        {
+            SetExpandedSize(ExpandedSizing.Clamp(PillAnimator.DefaultExpandedSize, _host.AvailableSizeDip));
+            SaveExpandedSize();
+        }
+    }
+
+    private void SetExpandedSize(SizeD size)
+    {
+        _expandedSize = size;
+        _current = size;
+        ApplyPanelSize();
+        _host.Apply(_current);
+        UpdateContent();
+    }
+
+    private void EndResize()
+    {
+        if (_resizing)
+        {
+            _resizing = false;
+            SaveExpandedSize();
+            Log.Info($"Resized to {_expandedSize.Width:F0}x{_expandedSize.Height:F0}");
+        }
+    }
+
+    private void SaveExpandedSize()
+    {
+        _settings.Current.ExpandedWidth = _expandedSize.Width;
+        _settings.Current.ExpandedHeight = _expandedSize.Height;
+        _settings.Save();
+    }
+
     private void OnRestingTapped(object sender, TappedRoutedEventArgs e) => _machine.RequestExpand();
 
     /// <summary>A click inside an expanded pill is the user engaging with it, so it may take focus (typing).</summary>
@@ -270,7 +359,10 @@ public sealed partial class MainWindow : Window
                 _host.ResetClickTracking();
                 _awayTimer.Start();
                 UpdateBadge();
-                Start(PillAnimator.ExpandedSize, PillAnimator.ExpandDuration);
+                // The display may have changed since the size was chosen.
+                _expandedSize = ExpandedSizing.Clamp(_expandedSize, _host.AvailableSizeDip);
+                ApplyPanelSize();
+                Start(_expandedSize, PillAnimator.ExpandDuration);
                 break;
             case PillState.Collapsing:
                 Start(PillAnimator.RestingSize, PillAnimator.CollapseDuration);
@@ -320,10 +412,12 @@ public sealed partial class MainWindow : Window
     /// <summary>Cross-fades resting/expanded content from the current size; no layout depends on window size.</summary>
     private void UpdateContent()
     {
-        var t = PillAnimator.ExpansionProgress(_current);
+        var t = PillAnimator.ExpansionProgress(_current, _expandedSize);
         RestingContent.Opacity = Math.Clamp(1 - t * 3, 0, 1);
         RestingContent.IsHitTestVisible = _machine.State is PillState.Resting or PillState.Collapsing && t < 0.5;
         Panel.Opacity = Math.Clamp((t - 0.45) / 0.55, 0, 1);
         Panel.IsHitTestVisible = _machine.State is PillState.Expanded;
+        Grip.Opacity = Panel.Opacity;
+        Grip.IsHitTestVisible = _machine.State is PillState.Expanded;
     }
 }

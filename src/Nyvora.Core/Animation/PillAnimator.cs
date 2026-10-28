@@ -9,7 +9,7 @@ public readonly record struct SizeD(double Width, double Height);
 public sealed class PillAnimator
 {
     public static readonly SizeD RestingSize = new(148, 36);
-    public static readonly SizeD ExpandedSize = new(420, 380);
+    public static readonly SizeD DefaultExpandedSize = new(420, 400);
 
     public static readonly TimeSpan ExpandDuration = TimeSpan.FromMilliseconds(320);
     public static readonly TimeSpan CollapseDuration = TimeSpan.FromMilliseconds(240);
@@ -41,10 +41,10 @@ public sealed class PillAnimator
         return new SizeD(Lerp(_from.Width, _to.Width, e), Lerp(_from.Height, _to.Height, e));
     }
 
-    /// <summary>0 at the resting size, 1 at the expanded size; drives content cross-fades.</summary>
-    public static double ExpansionProgress(SizeD size)
+    /// <summary>0 at the resting size, 1 at <paramref name="expanded"/>; drives content cross-fades.</summary>
+    public static double ExpansionProgress(SizeD size, SizeD expanded)
     {
-        var range = ExpandedSize.Width - RestingSize.Width;
+        var range = expanded.Width - RestingSize.Width;
         return Math.Clamp((size.Width - RestingSize.Width) / range, 0.0, 1.0);
     }
 

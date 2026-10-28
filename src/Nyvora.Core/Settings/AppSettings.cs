@@ -19,6 +19,11 @@ public sealed class AppSettings
     /// <summary>How often (minutes) Nyvora opens to ask you to update task statuses. 0 turns it off.</summary>
     public int StatusReminderMinutes { get; set; } = 60;
 
+    /// <summary>Expanded pill size in DIPs; 0 means the default. Set by dragging the corner grip.</summary>
+    public double ExpandedWidth { get; set; }
+
+    public double ExpandedHeight { get; set; }
+
     public DateTimeOffset? LastUpdateCheck { get; set; }
 
     public bool IsUpdateCheckDue(DateTimeOffset now) =>

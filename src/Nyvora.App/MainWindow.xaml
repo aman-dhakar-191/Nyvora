@@ -15,8 +15,18 @@
         </Grid.ContextFlyout>
 
         <!-- Expanded content: fixed width so it never reflows while the window grows. -->
-        <ui:TasksPanel x:Name="Panel" Width="420" Height="400" HorizontalAlignment="Center"
+        <ui:TasksPanel x:Name="Panel" HorizontalAlignment="Center"
                        VerticalAlignment="Top" Opacity="0" IsHitTestVisible="False" />
+
+        <!-- Resize grip: drag to resize the expanded pill (kept under the top edge); double-click resets. -->
+        <ui:ResizeGrip x:Name="Grip" Width="16" Height="16" Margin="0,0,10,10" HorizontalAlignment="Right"
+                       VerticalAlignment="Bottom" Background="Transparent" Opacity="0" IsHitTestVisible="False"
+                       ToolTipService.ToolTip="Drag to resize. Double-click to reset."
+                       PointerPressed="OnGripPressed" PointerMoved="OnGripMoved" PointerReleased="OnGripReleased"
+                       PointerCaptureLost="OnGripCaptureLost" DoubleTapped="OnGripDoubleTapped">
+            <Path Data="M 14,3 L 3,14 M 14,8 L 8,14" Stroke="#80FFFFFF" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+        </ui:ResizeGrip>
 
         <!-- Resting content: covers the whole pill, shows the hand cursor, and expands on tap. -->
         <ui:HandGrid x:Name="RestingContent" Background="Transparent" Tapped="OnRestingTapped">
