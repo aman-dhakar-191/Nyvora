@@ -58,6 +58,30 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(nint hWnd);
 
+    public const uint CF_UNICODETEXT = 13;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool OpenClipboard(nint hWndNewOwner);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CloseClipboard();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsClipboardFormatAvailable(uint format);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern nint GetClipboardData(uint format);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern nint GlobalLock(nint hMem);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GlobalUnlock(nint hMem);
+
     [DllImport("comctl32.dll")]
     public static extern bool SetWindowSubclass(nint hWnd, SubclassProc proc, nuint id, nuint refData);
 

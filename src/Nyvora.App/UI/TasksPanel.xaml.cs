@@ -20,7 +20,11 @@ public sealed partial class TasksPanel : UserControl
     private TaskList _tasks = new();
     private UpdateService? _updates;
 
-    public TasksPanel() => InitializeComponent();
+    public TasksPanel()
+    {
+        InitializeComponent();
+        ClipboardText.Attach(Input);
+    }
 
     public event Action? CollapseRequested;
 

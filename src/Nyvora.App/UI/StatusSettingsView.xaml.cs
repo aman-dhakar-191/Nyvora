@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Nyvora.App.Services;
 using Nyvora.Core.Tasks;
 using Windows.System;
 using Windows.UI;
@@ -13,7 +14,11 @@ public sealed partial class StatusSettingsView : UserControl
 {
     private StatusSet _statuses = new();
 
-    public StatusSettingsView() => InitializeComponent();
+    public StatusSettingsView()
+    {
+        InitializeComponent();
+        ClipboardText.Attach(NewName);
+    }
 
     public event Action? BackRequested;
 
@@ -45,6 +50,7 @@ public sealed partial class StatusSettingsView : UserControl
         }
 
         var name = new TextBox { Text = status.Name, MaxLength = StatusSet.MaxNameLength };
+        ClipboardText.Attach(name);
         void Commit()
         {
             if (name.Text.Trim() == status.Name)
