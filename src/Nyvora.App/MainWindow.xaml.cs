@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private SizeD _current = PillAnimator.RestingSize;
     private PillAnimator? _animator;
     private bool _passiveExpand;
+    private int _frames;
 
     public MainWindow()
     {
@@ -62,7 +63,7 @@ public sealed partial class MainWindow : Window
             _settings.Current.AlwaysOnTop = on;
             _settings.Save();
         };
-        Panel.CollapseRequested += () => _machine.RequestCollapse();
+        Panel.CollapseRequested += () => Collapse("collapse button");
         Panel.QuitRequested += Close;
 
         var queue = DispatcherQueue.GetForCurrentThread();
@@ -76,7 +77,7 @@ public sealed partial class MainWindow : Window
         {
             if (_host.PollClickOutside())
             {
-                _machine.RequestCollapse();
+                Collapse("click outside");
             }
         };
 
@@ -209,7 +210,19 @@ public sealed partial class MainWindow : Window
 
     private void OnEscape(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        args.Handled = _machine.RequestCollapse();
+        args.Handled = Collapse("Esc");
+    }
+
+    private bool Collapse(string reason)
+    {
+        var from = _machine.State;
+        var accepted = _machine.RequestCollapse();
+        if (accepted)
+        {
+            Log.Info($"Collapse ({reason}) while {from}");
+        }
+
+        return accepted;
     }
 
     private void OnQuit(object sender, RoutedEventArgs e) => Close();
@@ -218,12 +231,13 @@ public sealed partial class MainWindow : Window
     {
         if (e.WindowActivationState == WindowActivationState.Deactivated)
         {
-            _machine.RequestCollapse(); // fast path; the click poll covers cases where this never fires
+            Collapse("window deactivated"); // fast path; the click poll covers cases where this never fires
         }
     }
 
     private void OnStateChanged(PillState previous, PillState next)
     {
+        Log.Info($"State {previous} -> {next}");
         switch (next)
         {
             case PillState.Expanding:
@@ -256,6 +270,7 @@ public sealed partial class MainWindow : Window
     {
         // Begin from the on-screen size so reversing mid-animation is continuous.
         _animator = new PillAnimator(_current, target, duration);
+        _frames = 0;
         _clock.Restart();
         _frameTimer.Start();
     }
@@ -269,6 +284,7 @@ public sealed partial class MainWindow : Window
         }
 
         var elapsed = _clock.Elapsed;
+        _frames++;
         _current = _animator.Sample(elapsed);
         _host.Apply(_current);
         UpdateContent();
@@ -277,6 +293,7 @@ public sealed partial class MainWindow : Window
         {
             _frameTimer.Stop();
             _animator = null;
+            Log.Info($"Animation finished: {_frames} frames in {elapsed.TotalMilliseconds:F0} ms, size {_current.Width:F0}x{_current.Height:F0}");
             _machine.CompleteAnimation(_machine.Generation);
             UpdateContent();
         }
