@@ -1,32 +1,63 @@
 name: Release
 
-# Publishes a development release when a version tag (vX.Y.Z) is pushed, or on manual run with a tag name.
+# Run it from the Actions tab and pick patch, minor or major: the next version is the latest vX.Y.Z tag
+# bumped accordingly, tagged at the selected commit, built, and published as a GitHub release.
+# Pushing a tag like v1.2.3 by hand also works and releases exactly that version.
 # The app's self-updater needs both the zip and its .sha256 asset, and a version above the one it is running.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Tag to create/release (e.g. v0.1.0)"
+      bump:
+        description: "Version bump (applied to the latest vX.Y.Z tag)"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
         required: true
 
 permissions:
-  contents: write # needed to create the GitHub release
+  contents: write # needed to create the tag and GitHub release
+
+concurrency:
+  group: release # two releases at once could compute the same next version
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: windows-latest
-    env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags are needed to find the latest version
 
-      - name: Validate tag and derive version
+      - name: Determine version
         shell: pwsh
+        env:
+          BUMP: ${{ github.event.inputs.bump }}
         run: |
-          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag '$env:TAG' must look like v1.2.3" }
-          "VERSION=$($env:TAG.Substring(1))" >> $env:GITHUB_ENV
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            $tag = $env:GITHUB_REF_NAME
+          } else {
+            $latest = git tag --list 'v*' |
+              Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
+              ForEach-Object { [version]$_.Substring(1) } |
+              Sort-Object -Descending |
+              Select-Object -First 1
+            if (-not $latest) { $latest = [version]'0.0.0' }
+            $next = switch ($env:BUMP) {
+              'major' { [version]::new($latest.Major + 1, 0, 0) }
+              'minor' { [version]::new($latest.Major, $latest.Minor + 1, 0) }
+              'patch' { [version]::new($latest.Major, $latest.Minor, $latest.Build + 1) }
+              default { throw "Unknown bump '$env:BUMP'" }
+            }
+            $tag = "v$next"
+            Write-Host "Latest tag: v$latest  ->  $env:BUMP bump  ->  $tag"
+          }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag '$tag' must look like v1.2.3" }
+          "TAG=$tag" >> $env:GITHUB_ENV
+          "VERSION=$($tag.Substring(1))" >> $env:GITHUB_ENV
+          "### Releasing $tag" >> $env:GITHUB_STEP_SUMMARY
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -52,4 +83,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $zip = "Nyvora-$env:TAG-win-x64.zip"
+          # --target creates the tag at this commit when it does not exist yet (the manual-run case).
           gh release create "$env:TAG" $zip "$zip.sha256" --title "Nyvora $env:TAG" --generate-notes --prerelease --target "$env:GITHUB_SHA"

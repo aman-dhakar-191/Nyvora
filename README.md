@@ -31,6 +31,10 @@ dotnet run --project src/Nyvora.App -c Release -p:Platform=x64
 - Updates: the panel footer shows the version and a **Check for updates** button. Nyvora also checks GitHub Releases once a day, a few seconds after launch (set `"AutoCheckUpdates": false` in `%LOCALAPPDATA%\Nyvora\settings.json` to disable all automatic network requests). Installing is always your click: it downloads the release zip, verifies its SHA-256 from the release's `.sha256` file, then restarts into the new version. It is disabled when running from a build folder.
 - Logs: `%LOCALAPPDATA%\Nyvora\nyvora.log` (events and exceptions only; no network, no telemetry).
 
+## Releasing
+
+In GitHub go to **Actions → Release → Run workflow** and choose **patch**, **minor** or **major**. The workflow takes the latest `vX.Y.Z` tag, bumps it (patch `1.2.3→1.2.4`, minor `1.2.3→1.3.0`, major `1.2.3→2.0.0`), runs the tests, builds the app with that version, tags the selected commit, and publishes a pre-release with the zip and its `.sha256`. Installed copies then offer it through **Check for updates**. Pushing a tag such as `v1.2.4` by hand releases exactly that version instead.
+
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md)
