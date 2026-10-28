@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="using:Nyvora.App.UI">
 
-    <Grid x:Name="Root" Background="#FF0B0B10">
+    <Grid x:Name="Root" Background="#FF0B0B10" RequestedTheme="Dark">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="Escape" Invoked="OnEscape" />
         </Grid.KeyboardAccelerators>

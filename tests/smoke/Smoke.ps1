@@ -128,16 +128,17 @@ try {
   Write-Host 'Settings side panel'
   $open = Get-Pill $proc
   $baseW = $open.W
-  $gearX = [int]($open.R - 96 * $scale); $iconY = [int]($open.T + 32 * $scale)
-  Click $gearX $iconY
+  $iconY = [int]($open.T + 32 * $scale)
+  Click ([int]($open.R - 96 * $scale)) $iconY                      # the gear
   $wide = Wait-Pill $proc { param($p) $p.W -gt $baseW + 200 * $scale } 5
   Check ($wide.W -gt $baseW + 200 * $scale) 'the gear opens Settings beside the tasks' ("{0} -> {1}" -f $baseW, $wide.W)
-  Start-Sleep -Milliseconds 700
+  Start-Sleep -Milliseconds 900
+  $wide = Get-Pill $proc                                           # settled: the window may have shifted left to fit the screen
   Shot 'settings'
-  Click ([int]($wide.L + 396 * $scale + 14 * $scale)) $iconY   # the Settings panel has its own close button... fall back to the gear below
-  $back = Wait-Pill $proc { param($p) $p.W -le $baseW + 10 * $scale } 3
+  Click ([int]($wide.R - 38 * $scale)) $iconY                      # the close button of the Settings panel
+  $back = Wait-Pill $proc { param($p) $p.W -le $baseW + 10 * $scale } 4
   if ($back.W -gt $baseW + 10 * $scale) {
-    Click $gearX $iconY
+    Click ([int]($wide.L + 324 * $scale)) $iconY                   # fall back to the gear, which toggles it
     $back = Wait-Pill $proc { param($p) $p.W -le $baseW + 10 * $scale } 4
   }
   Check ($back.W -le $baseW + 10 * $scale) 'Settings closes again' ("{0}" -f $back.W)
@@ -158,9 +159,10 @@ try {
 
   Write-Host 'Quit'
   Click ([int](($small.L + $small.R) / 2)) ([int](($small.T + $small.B) / 2))
-  $open = Wait-Pill $proc { param($p) $p.W -gt 330 * $scale } 5
-  Start-Sleep -Milliseconds 700
-  Click ([int]($open.R - 36 * $scale)) $iconY
+  [void](Wait-Pill $proc { param($p) $p.W -gt 330 * $scale } 5)
+  Start-Sleep -Milliseconds 900
+  $open = Get-Pill $proc                                           # settled, so the right edge is final
+  Click ([int]($open.R - 36 * $scale)) ([int]($open.T + 32 * $scale))   # the Quit icon
   $exited = $proc.WaitForExit(6000)
   Check $exited 'the Quit button closes the app'
 }

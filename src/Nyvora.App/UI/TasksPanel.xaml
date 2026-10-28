@@ -45,7 +45,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="Input" PlaceholderText="Add a task, press Enter" MaxLength="200" MinHeight="38"
-                     VerticalContentAlignment="Center" Padding="12,0" KeyDown="OnInputKeyDown" />
+                     VerticalContentAlignment="Center" Padding="12,8,12,0" KeyDown="OnInputKeyDown" />
             <ui:HandButton x:Name="ReminderButton" Grid.Column="1" Click="OnReminderButtonClick" MinHeight="38" MinWidth="44"
                            ToolTipService.ToolTip="Add a reminder to the next task">
                 <TextBlock x:Name="ReminderLabel" Text="⏰" FontSize="13" />
