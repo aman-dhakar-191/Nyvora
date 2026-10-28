@@ -127,6 +127,21 @@ public sealed class TaskList
         return true;
     }
 
+    /// <summary>Sets, moves or (with null) clears a task's reminder; a changed reminder fires again.</summary>
+    public bool SetReminder(Guid id, DateTimeOffset? at)
+    {
+        var item = Find(id);
+        if (item is null)
+        {
+            return false;
+        }
+
+        item.RemindAt = at;
+        item.Notified = false;
+        Changed?.Invoke();
+        return true;
+    }
+
     public bool Snooze(Guid id, DateTimeOffset now, TimeSpan by)
     {
         var item = Find(id);

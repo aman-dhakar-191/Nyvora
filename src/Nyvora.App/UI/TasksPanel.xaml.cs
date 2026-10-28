@@ -203,14 +203,28 @@ public sealed partial class TasksPanel : UserControl
         Grid.SetColumn(title, 2);
         row.Children.Add(title);
 
-        if (item.RemindAt is { } at && !item.Done)
+        if (!item.Done)
         {
-            var when = new TextBlock
+            // Always present on open tasks: shows the reminder, or "Add", and opens the inline editor.
+            var when = new HandButton
             {
-                Text = (isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now),
-                Foreground = isDue ? DueBrush : MutedBrush,
-                FontSize = 12,
+                Content = new TextBlock
+                {
+                    Text = item.RemindAt is { } at ? (isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now) : "⏰ Add",
+                    FontSize = 12,
+                    Foreground = isDue ? DueBrush : MutedBrush,
+                },
+                Padding = new Thickness(6, 2, 6, 2),
+                MinHeight = 0,
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
                 VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTipService.SetToolTip(when, item.RemindAt is null ? "Add a reminder" : "Change or clear the reminder");
+            when.Click += (_, _) =>
+            {
+                _editingReminder = _editingReminder == item.Id ? null : item.Id;
+                Refresh();
             };
             Grid.SetColumn(when, 3);
             row.Children.Add(when);
@@ -236,7 +250,82 @@ public sealed partial class TasksPanel : UserControl
         Grid.SetColumn(delete, 5);
         row.Children.Add(delete);
 
+        if (_editingReminder == item.Id && !item.Done)
+        {
+            var stack = new StackPanel { Spacing = 2 };
+            stack.Children.Add(row);
+            stack.Children.Add(BuildReminderEditor(item));
+            return stack;
+        }
+
         return row;
+    }
+
+    private Guid? _editingReminder;
+
+    private UIElement BuildReminderEditor(TaskItem item)
+    {
+        void Apply(DateTimeOffset? at)
+        {
+            _editingReminder = null;
+            _tasks.SetReminder(item.Id, at);
+        }
+
+        HandButton Button(string label, Action onClick, bool enabled = true)
+        {
+            var b = new HandButton { Content = label, FontSize = 12, Padding = new Thickness(8, 2, 8, 2), MinHeight = 0, IsEnabled = enabled };
+            b.Click += (_, _) => onClick();
+            return b;
+        }
+
+        var presets = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        presets.Children.Add(Button("10 min", () => Apply(Reminders.Resolve(ReminderPreset.InTenMinutes, DateTimeOffset.Now))));
+        presets.Children.Add(Button("1 hour", () => Apply(Reminders.Resolve(ReminderPreset.InOneHour, DateTimeOffset.Now))));
+        presets.Children.Add(Button("Tomorrow 9:00", () => Apply(Reminders.Resolve(ReminderPreset.TomorrowMorning, DateTimeOffset.Now))));
+        presets.Children.Add(Button("Clear", () => Apply(null), enabled: item.RemindAt is not null));
+
+        var time = new TextBox { PlaceholderText = "Time, e.g. 14:30 or 2:30 pm", Width = 190, MaxLength = 12 };
+        ClipboardText.Attach(time);
+        var error = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)), TextWrapping = TextWrapping.Wrap };
+        void SetCustom()
+        {
+            if (Reminders.TryParseClock(time.Text, DateTimeOffset.Now, out var at))
+            {
+                Apply(at);
+            }
+            else
+            {
+                error.Text = "Use a time like 14:30 or 2:30 pm.";
+            }
+        }
+
+        time.KeyDown += (_, e) =>
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                SetCustom();
+                e.Handled = true;
+            }
+        };
+        time.Loaded += (_, _) => time.Focus(FocusState.Programmatic);
+
+        var custom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        custom.Children.Add(time);
+        custom.Children.Add(Button("Set", SetCustom));
+
+        var box = new StackPanel { Spacing = 6 };
+        box.Children.Add(presets);
+        box.Children.Add(custom);
+        box.Children.Add(error);
+
+        return new Border
+        {
+            Margin = new Thickness(30, 0, 0, 6),
+            Padding = new Thickness(10, 8, 10, 8),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+            Child = box,
+        };
     }
 
     // Done is green; open statuses take a colour by their position so neighbours are easy to tell apart.
