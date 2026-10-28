@@ -35,6 +35,12 @@ public sealed class TagSet
                 continue;
             }
 
+            // Stored data is repaired rather than rejected; typed names are validated (see ValidateName).
+            if (name.Length > MaxNameLength)
+            {
+                name = name[..MaxNameLength].TrimEnd();
+            }
+
             var id = string.IsNullOrWhiteSpace(d.Id) ? NewId() : d.Id.Trim();
             if (!ids.Add(id) || !names.Add(name))
             {
@@ -152,11 +158,7 @@ public sealed class TagSet
             : null;
     }
 
-    private static string Clean(string? name)
-    {
-        var n = (name ?? "").Trim().TrimStart('#').Trim();
-        return n.Length > MaxNameLength ? n[..MaxNameLength].TrimEnd() : n;
-    }
+    private static string Clean(string? name) => (name ?? "").Trim().TrimStart('#').Trim();
 
     private static int Wrap(int color) => ((color % PaletteSize) + PaletteSize) % PaletteSize;
 

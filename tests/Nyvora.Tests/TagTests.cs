@@ -92,8 +92,9 @@ public class TagSetTests
             new TagDef { Id = "2", Name = "home", Color = 0 },
             new TagDef { Id = "", Name = "Errands", Color = 99 },
             new TagDef { Id = "3", Name = " ", Color = 0 },
+            new TagDef { Id = "4", Name = new string('y', 50), Color = 0 },
         });
-        Assert.Equal(new[] { "Home", "Errands" }, s.Items.Select(t => t.Name));
+        Assert.Equal(new[] { "Home", "Errands", new string('y', TagSet.MaxNameLength) }, s.Items.Select(t => t.Name));
         Assert.All(s.Items, t => Assert.InRange(t.Color, 0, TagSet.PaletteSize - 1));
         Assert.False(string.IsNullOrEmpty(s.Items[1].Id));
     }
