@@ -307,7 +307,11 @@ public sealed partial class TasksPanel : UserControl
                 e.Handled = true;
             }
         };
-        time.Loaded += (_, _) => time.Focus(FocusState.Programmatic);
+        time.Loaded += (_, _) =>
+        {
+            time.Focus(FocusState.Programmatic);
+            time.StartBringIntoView(); // the list area is small; keep the editor visible
+        };
 
         var custom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         custom.Children.Add(time);
