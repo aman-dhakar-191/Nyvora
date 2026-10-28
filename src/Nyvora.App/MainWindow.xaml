@@ -15,7 +15,7 @@
         </Grid.ContextFlyout>
 
         <!-- Expanded content: fixed width so it never reflows while the window grows. -->
-        <ui:TasksPanel x:Name="Panel" Width="420" Height="380" HorizontalAlignment="Center"
+        <ui:TasksPanel x:Name="Panel" Width="420" Height="400" HorizontalAlignment="Center"
                        VerticalAlignment="Top" Opacity="0" IsHitTestVisible="False" />
 
         <!-- Resting content: covers the whole pill, shows the hand cursor, and expands on tap. -->

@@ -1,6 +1,7 @@
 name: Release
 
-# Publishes a development release when a version tag (v*) is pushed, or on manual run with a tag name.
+# Publishes a development release when a version tag (vX.Y.Z) is pushed, or on manual run with a tag name.
+# The app's self-updater needs both the zip and its .sha256 asset, and a version above the one it is running.
 on:
   push:
     tags: ["v*"]
@@ -21,6 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate tag and derive version
+        shell: pwsh
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "Tag '$env:TAG' must look like v1.2.3" }
+          "VERSION=$($env:TAG.Substring(1))" >> $env:GITHUB_ENV
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -29,15 +36,20 @@ jobs:
         run: dotnet test tests/Nyvora.Tests/Nyvora.Tests.csproj -c Release
 
       - name: Publish (win-x64, self-contained)
-        run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 -p:Platform=x64 -o artifacts/Nyvora-win-x64
+        run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 -p:Platform=x64 -p:Version=${{ env.VERSION }} -o artifacts/Nyvora-win-x64
 
-      - name: Zip
-        run: Compress-Archive -Path artifacts/Nyvora-win-x64/* -DestinationPath "Nyvora-$env:TAG-win-x64.zip"
+      - name: Zip and checksum
         shell: pwsh
+        run: |
+          $zip = "Nyvora-$env:TAG-win-x64.zip"
+          Compress-Archive -Path artifacts/Nyvora-win-x64/* -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Out-File "$zip.sha256" -Encoding ascii
 
       - name: Create GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:TAG" "Nyvora-$env:TAG-win-x64.zip" --title "Nyvora $env:TAG" --generate-notes --prerelease --target "$env:GITHUB_SHA"
+          $zip = "Nyvora-$env:TAG-win-x64.zip"
+          gh release create "$env:TAG" $zip "$zip.sha256" --title "Nyvora $env:TAG" --generate-notes --prerelease --target "$env:GITHUB_SHA"

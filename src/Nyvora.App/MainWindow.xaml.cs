@@ -15,6 +15,7 @@ namespace Nyvora.App;
 public sealed partial class MainWindow : Window
 {
     private static readonly Brush AccentBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD4));
+    private static readonly Brush UpdateBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x60, 0xA5, 0xFA));
     private static readonly Brush DueBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24));
 
     private readonly PillStateMachine _machine = new();
@@ -26,6 +27,8 @@ public sealed partial class MainWindow : Window
     private readonly JsonTaskStore _store = new(Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json"));
     private readonly TaskList _tasks;
+    private readonly UpdateService _updates = new();
+    private readonly DispatcherQueueTimer _updateCheckTimer;
 
     private SizeD _current = PillAnimator.RestingSize;
     private PillAnimator? _animator;
@@ -40,7 +43,9 @@ public sealed partial class MainWindow : Window
 
         _tasks = new TaskList(LoadTasks());
         _tasks.Changed += OnTasksChanged;
-        Panel.Attach(_tasks);
+        _updates.Changed += UpdateBadge;
+        _updates.RestartRequested += Close;
+        Panel.Attach(_tasks, _updates);
         Panel.CollapseRequested += () => _machine.RequestCollapse();
         Panel.QuitRequested += Close;
 
@@ -65,6 +70,22 @@ public sealed partial class MainWindow : Window
         _reminderTimer.Interval = TimeSpan.FromSeconds(20);
         _reminderTimer.Tick += (_, _) => CheckReminders();
 
+        // One-shot, a few seconds after launch so the check never competes with startup.
+        _updateCheckTimer = queue.CreateTimer();
+        _updateCheckTimer.Interval = TimeSpan.FromSeconds(8);
+        _updateCheckTimer.IsRepeating = false;
+        _updateCheckTimer.Tick += async (_, _) =>
+        {
+            try
+            {
+                await _updates.AutoCheckAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Automatic update check failed", ex);
+            }
+        };
+
         _machine.StateChanged += OnStateChanged;
         Activated += OnActivated;
         Closed += (_, _) =>
@@ -72,6 +93,7 @@ public sealed partial class MainWindow : Window
             _frameTimer.Stop();
             _awayTimer.Stop();
             _reminderTimer.Stop();
+            _updateCheckTimer.Stop();
             _host.Dispose();
             Log.Info("Closed");
         };
@@ -83,6 +105,8 @@ public sealed partial class MainWindow : Window
         UpdateContent();
         _reminderTimer.Start();
         CheckReminders();
+        UpdateService.CleanupOldUpdates();
+        _updateCheckTimer.Start();
         Log.Info("Started");
     }
 
@@ -151,7 +175,9 @@ public sealed partial class MainWindow : Window
     {
         var due = _tasks.DueCount(DateTimeOffset.Now);
         RestingLabel.Text = due > 0 ? $"{due} due" : "Nyvora";
-        StatusDot.Fill = due > 0 ? DueBrush : AccentBrush;
+        StatusDot.Fill = due > 0 ? DueBrush
+            : _updates.State == UpdateState.Available ? UpdateBrush
+            : AccentBrush;
     }
 
     private void OnRestingTapped(object sender, TappedRoutedEventArgs e) => _machine.RequestExpand();

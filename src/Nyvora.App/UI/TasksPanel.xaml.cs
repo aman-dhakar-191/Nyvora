@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Nyvora.App.Services;
 using Nyvora.Core.Tasks;
 using Windows.System;
 using Windows.UI.Text;
@@ -17,6 +18,7 @@ public sealed partial class TasksPanel : UserControl
     private static readonly Brush DueBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24));
 
     private TaskList _tasks = new();
+    private UpdateService? _updates;
 
     public TasksPanel() => InitializeComponent();
 
@@ -24,12 +26,63 @@ public sealed partial class TasksPanel : UserControl
 
     public event Action? QuitRequested;
 
-    public void Attach(TaskList tasks)
+    internal void Attach(TaskList tasks, UpdateService updates)
     {
         _tasks.Changed -= Refresh;
         _tasks = tasks;
         _tasks.Changed += Refresh;
         Refresh();
+
+        if (_updates is not null)
+        {
+            _updates.Changed -= RefreshUpdate;
+        }
+
+        _updates = updates;
+        _updates.Changed += RefreshUpdate;
+        RefreshUpdate();
+    }
+
+    private void RefreshUpdate()
+    {
+        if (_updates is not { } u)
+        {
+            return;
+        }
+
+        UpdateText.Text = u.State == UpdateState.Idle ? u.CurrentText : $"{u.CurrentText} · {u.Message}";
+        var busy = u.State is UpdateState.Checking or UpdateState.Downloading or UpdateState.Installing;
+        var installable = u.State == UpdateState.Available && u.Available is not null;
+
+        UpdateButton.IsEnabled = !busy && (!installable || u.CanInstall);
+        UpdateButton.Content = installable
+            ? (u.CanInstall ? "Install and restart" : "Update available")
+            : "Check for updates";
+    }
+
+    private async void OnUpdateClick(object sender, RoutedEventArgs e)
+    {
+        if (_updates is not { } u)
+        {
+            return;
+        }
+
+        try
+        {
+            if (u.State == UpdateState.Available)
+            {
+                await u.InstallAsync();
+            }
+            else
+            {
+                await u.CheckAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Last resort so an unexpected failure cannot crash the app from an async void handler.
+            Log.Error("Update action failed", ex);
+        }
     }
 
     public void FocusInput() => Input.Focus(FocusState.Programmatic);

@@ -24,8 +24,9 @@ dotnet run --project src/Nyvora.App -c Release -p:Platform=x64
 ## Using it
 
 - Click the pill to expand. It opens a task list: type a task and press Enter, or add it with a reminder (10 min, 1 hour, tomorrow 9:00). Due tasks turn the resting pill amber ("N due"); the pill also pops open, without taking focus, when a reminder fires. Snooze adds 10 minutes. Tasks are stored locally in `%LOCALAPPDATA%\Nyvora\tasks.json`; reminders only fire while Nyvora is running (missed ones fire at next start).
-- Click the pill to expand. Collapse with **Esc**, **Collapse**, or by clicking elsewhere.
+- Collapse with **Esc**, **Collapse**, or by clicking elsewhere.
 - Right-click the pill (or use **Quit**) to exit. There is no taskbar entry by design.
+- Updates: the panel footer shows the version and a **Check for updates** button. Nyvora also checks GitHub Releases once a day, a few seconds after launch (set `"AutoCheckUpdates": false` in `%LOCALAPPDATA%\Nyvora\settings.json` to disable all automatic network requests). Installing is always your click: it downloads the release zip, verifies its SHA-256 from the release's `.sha256` file, then restarts into the new version. It is disabled when running from a build folder.
 - Logs: `%LOCALAPPDATA%\Nyvora\nyvora.log` (events and exceptions only; no network, no telemetry).
 
 ## Docs

@@ -11,6 +11,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid>
@@ -37,6 +38,17 @@
         </ScrollViewer>
 
         <Grid Grid.Row="4" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="UpdateText" FontSize="12" Foreground="#FF9A9AB0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+            <ui:HandButton x:Name="UpdateButton" Grid.Column="1" Padding="10,3" FontSize="12"
+                           Click="OnUpdateClick" />
+        </Grid>
+
+        <Grid Grid.Row="5" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
