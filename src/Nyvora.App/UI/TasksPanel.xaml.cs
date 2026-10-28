@@ -211,7 +211,7 @@ public sealed partial class TasksPanel : UserControl
 
     private static readonly Color DoneColor = Color.FromArgb(0xFF, 0x4A, 0xDE, 0x80);
 
-    private UIElement BuildChip(TaskItem item)
+    private HandButton BuildChip(TaskItem item)
     {
         var status = _tasks.StatusOf(item);
         var color = status.IsDone ? DoneColor : OpenColors[Math.Max(0, _tasks.Statuses.IndexOf(status.Id)) % OpenColors.Length];

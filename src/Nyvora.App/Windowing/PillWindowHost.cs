@@ -95,7 +95,7 @@ internal sealed class PillWindowHost : IDisposable
     /// </summary>
     public bool PollClickOutside()
     {
-        var down = ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON) | GetAsyncKeyState(VK_MBUTTON)) & 0x8000) != 0;
+        var down = IsDown(VK_LBUTTON) || IsDown(VK_RBUTTON) || IsDown(VK_MBUTTON);
         var pressed = down && !_buttonWasDown;
         _buttonWasDown = down;
         if (!pressed || !GetCursorPos(out var p) || !GetWindowRect(_hwnd, out var r))
@@ -105,6 +105,8 @@ internal sealed class PillWindowHost : IDisposable
 
         return p.X < r.Left || p.X >= r.Right || p.Y < r.Top || p.Y >= r.Bottom;
     }
+
+    private static bool IsDown(int vKey) => (GetAsyncKeyState(vKey) & 0x8000) != 0;
 
     public void ResetClickTracking() => _buttonWasDown = true; // ignore a press already in progress
 
