@@ -15,6 +15,7 @@ public sealed partial class TasksPanel : UserControl
 {
     private static readonly Brush TextBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xE7, 0xE7, 0xEE));
     private static readonly Brush MutedBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x9A, 0x9A, 0xB0));
+    private static readonly Brush TodayBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD4));
     private static readonly Brush DueBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24));
 
     private TaskList _tasks = new();
@@ -86,7 +87,10 @@ public sealed partial class TasksPanel : UserControl
     {
         var now = DateTimeOffset.Now;
         var due = _tasks.DueCount(now);
-        Summary.Text = due > 0 ? $"{_tasks.OpenCount} open · {due} due" : $"{_tasks.OpenCount} open";
+        var later = _tasks.LaterTodayCount(now);
+        Summary.Text = $"{_tasks.OpenCount} open"
+            + (due > 0 ? $" · {due} due" : "")
+            + (later > 0 ? $" · {later} later today" : "");
 
         Rows.Children.Clear();
         if (_nudge is not null)
@@ -272,7 +276,7 @@ public sealed partial class TasksPanel : UserControl
                     Text = item.RemindAt is { } at ? (isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now) : "⏰",
                     Opacity = item.RemindAt is null ? 0.55 : 1, // a quiet bell until a reminder exists
                     FontSize = 12,
-                    Foreground = isDue ? DueBrush : MutedBrush,
+                    Foreground = isDue ? DueBrush : TaskList.IsLaterToday(item, now) ? TodayBrush : MutedBrush,
                 },
                 Padding = new Thickness(6, 2, 6, 2),
                 MinHeight = 0,

@@ -85,6 +85,30 @@ public class TaskListTests
     }
 
     [Fact]
+    public void OrderedPutsInProgressAboveToDo()
+    {
+        var l = new TaskList();
+        var todo = l.Add("todo", Now, Now.AddHours(1))!;
+        var doing = l.Add("doing", Now)!;
+        l.CycleStatus(doing.Id); // To do -> In progress
+
+        Assert.Equal(new[] { doing.Id, todo.Id }, l.Ordered().Select(i => i.Id));
+    }
+
+    [Fact]
+    public void LaterTodayCountsOnlyUpcomingRemindersOnTheSameDay()
+    {
+        var l = new TaskList();
+        var noon = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
+        l.Add("past", noon, noon.AddHours(-1));
+        l.Add("later", noon, noon.AddHours(3));
+        l.Add("tomorrow", noon, noon.AddHours(20));
+        l.Add("none", noon);
+
+        Assert.Equal(1, l.LaterTodayCount(noon));
+    }
+
+    [Fact]
     public void ChangedIsRaisedForMutations()
     {
         var l = new TaskList();

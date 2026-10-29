@@ -116,6 +116,12 @@ public sealed class TaskList
 
     public int DueCount(DateTimeOffset now) => _items.Count(i => IsDue(i, now));
 
+    /// <summary>Open task whose reminder is later today (local date) and not yet due.</summary>
+    public static bool IsLaterToday(TaskItem item, DateTimeOffset now) =>
+        !item.Done && item.RemindAt is { } at && at > now && at.ToOffset(now.Offset).Date == now.Date;
+
+    public int LaterTodayCount(DateTimeOffset now) => _items.Count(i => IsLaterToday(i, now));
+
     public TaskItem? Add(string title, DateTimeOffset now, DateTimeOffset? remindAt = null)
     {
         title = title.Trim();
@@ -240,6 +246,7 @@ public sealed class TaskList
     public IReadOnlyList<TaskItem> Ordered() =>
         _items
             .OrderBy(i => i.Done)
+            .ThenByDescending(i => i.Done ? 0 : _statuses.IndexOf(StatusOf(i).Id)) // furthest along (e.g. In progress) first
             .ThenBy(i => i.RemindAt ?? DateTimeOffset.MaxValue)
             .ThenBy(i => i.Created)
             .ToList();
