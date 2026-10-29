@@ -259,12 +259,16 @@ public sealed class McpTests : IDisposable
         using var first = TaskFileLock.Acquire(path, TimeSpan.FromSeconds(1));
         Assert.True(first.Acquired);
 
-        // A second holder on another thread must wait out the timeout while the first is held.
-        var got = Task.Run(() =>
+        // A second holder must be a genuinely different thread: Task.Run(...).Result can run the work inline on this
+        // thread, which would simply re-enter our own lock.
+        var got = true;
+        var other = new Thread(() =>
         {
             using var second = TaskFileLock.Acquire(path, TimeSpan.FromMilliseconds(200));
-            return second.Acquired;
-        }).Result;
+            got = second.Acquired;
+        });
+        other.Start();
+        other.Join();
         Assert.False(got);
     }
 }
