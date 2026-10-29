@@ -41,8 +41,8 @@ jobs:
       - name: Check the publish bundles the .NET runtime
         shell: pwsh
         run: |
-          foreach ($f in 'coreclr.dll', 'hostfxr.dll', 'System.Private.CoreLib.dll') {
-            if (-not (Test-Path "artifacts/Nyvora-win-x64/$f")) { throw "Missing $f: the build is not self-contained" }
+          foreach ($f in 'coreclr.dll', 'hostpolicy.dll', 'System.Private.CoreLib.dll') {
+            if (-not (Test-Path "artifacts/Nyvora-win-x64/$f")) { throw "Missing ${f}: the build is not self-contained" }
           }
           "Self-contained: runtime files present"
 
