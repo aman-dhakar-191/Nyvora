@@ -18,11 +18,14 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? StatusReminderChanged;
 
-    internal void Attach(StatusSet statuses, TagSet tags, UpdateService updates, bool alwaysOnTop, bool statusReminder)
+    public event Action<bool>? LaunchAtSignInChanged;
+
+    internal void Attach(StatusSet statuses, TagSet tags, UpdateService updates, bool alwaysOnTop, bool statusReminder, bool launchAtSignIn)
     {
         TagsEditor.Attach(tags);
         TopToggle.IsChecked = alwaysOnTop;
         ReminderToggle.IsChecked = statusReminder;
+        StartupToggle.IsChecked = launchAtSignIn;
         Statuses.Attach(statuses);
 
         if (_updates is not null)
@@ -38,6 +41,9 @@ public sealed partial class SettingsView : UserControl
     private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
+
+    private void OnStartupClick(object sender, RoutedEventArgs e) =>
+        LaunchAtSignInChanged?.Invoke(StartupToggle.IsChecked == true);
 
     private void OnReminderClick(object sender, RoutedEventArgs e) =>
         StatusReminderChanged?.Invoke(ReminderToggle.IsChecked == true);

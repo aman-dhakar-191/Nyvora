@@ -78,7 +78,16 @@ public sealed partial class MainWindow : Window
         _updates.RestartRequested += Close;
         Panel.Attach(_tasks, _updates, _statuses, _tags);
         Panel.SettingsRequested += ToggleSettings;
-        Side.Attach(_statuses, _tags, _updates, _settings.Current.AlwaysOnTop, _statusNudge.Enabled);
+        Side.Attach(_statuses, _tags, _updates, _settings.Current.AlwaysOnTop, _statusNudge.Enabled, _settings.Current.LaunchAtSignIn);
+        Side.LaunchAtSignInChanged += on =>
+        {
+            StartupService.SetLaunchAtSignIn(on);
+            _settings.Current.LaunchAtSignIn = on;
+            _settings.Save();
+        };
+        // Re-applied every launch so the entry follows the exe if the install folder ever moves.
+        StartupService.SetLaunchAtSignIn(_settings.Current.LaunchAtSignIn);
+        StartupService.EnsureStartMenuShortcut();
         Side.StatusReminderChanged += on =>
         {
             var minutes = on ? 60 : 0;

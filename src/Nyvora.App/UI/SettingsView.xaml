@@ -25,6 +25,7 @@
                 <StackPanel Spacing="6">
                     <TextBlock Text="General" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
                     <ui:HandCheckBox x:Name="TopToggle" Content="Always on top" MinWidth="0" Click="OnTopClick" />
+                    <ui:HandCheckBox x:Name="StartupToggle" Content="Start Nyvora when I sign in" MinWidth="0" Click="OnStartupClick" />
                     <ui:HandCheckBox x:Name="ReminderToggle" MinWidth="0" Click="OnReminderClick"
                                      Content="Every hour, open Nyvora to remind me to update task statuses" />
                 </StackPanel>
