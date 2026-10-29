@@ -46,6 +46,15 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
+                    <TextBlock Text="AI agents (MCP)" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
+                    <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                               Text="Let an AI app (Claude Desktop, Cursor, VS Code...) read your tasks. It runs on this PC only. Paste this into the app's MCP settings; add --allow-write to the args to let it change tasks." />
+                    <TextBox x:Name="McpConfig" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas"
+                             FontSize="11" MinHeight="120" />
+                    <ui:HandButton x:Name="McpCopy" Content="Copy config" Click="OnCopyMcp" HorizontalAlignment="Left" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
                     <TextBlock Text="Tags" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
                     <ui:TagSettingsView x:Name="TagsEditor" />
                 </StackPanel>

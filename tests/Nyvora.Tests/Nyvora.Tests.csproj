@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Nyvora.Core\Nyvora.Core.csproj" />
+    <ProjectReference Include="..\..\src\Nyvora.Mcp\Nyvora.Mcp.csproj" />
   </ItemGroup>
 </Project>

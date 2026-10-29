@@ -24,8 +24,13 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _reminderTimer;
     private readonly Stopwatch _clock = new();
     private readonly Stopwatch _sideClock = new();
-    private readonly JsonTaskStore _store = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json"));
+    private static readonly string TasksPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json");
+
+    private readonly JsonTaskStore _store = new(TasksPath);
+    private FileSystemWatcher? _watcher;
+    private DispatcherQueueTimer? _reloadTimer;
+    private bool _reloading;
     private readonly StatusSet _statuses;
     private readonly TagSet _tags;
     private readonly TaskList _tasks;
@@ -125,6 +130,7 @@ public sealed partial class MainWindow : Window
         Panel.QuitRequested += Close;
 
         var queue = DispatcherQueue.GetForCurrentThread();
+        WatchTasksFile(queue);
         _awayTimer = queue.CreateTimer();
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
         _awayTimer.Tick += (_, _) =>
@@ -163,6 +169,7 @@ public sealed partial class MainWindow : Window
         _machine.StateChanged += OnStateChanged;
         Closed += (_, _) =>
         {
+            _watcher?.Dispose();
             StopFrames();
             _awayTimer.Stop();
             _reminderTimer.Stop();
@@ -209,8 +216,15 @@ public sealed partial class MainWindow : Window
 
     private void OnTasksChanged()
     {
+        if (_reloading)
+        {
+            UpdateBadge(); // these tasks just came from the file; writing them back would only echo
+            return;
+        }
+
         try
         {
+            using var gate = TaskFileLock.Acquire(TasksPath, TimeSpan.FromSeconds(3));
             _store.Save(_tasks.Items);
         }
         catch (IOException ex)
@@ -223,6 +237,74 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateBadge();
+    }
+
+    /// <summary>Picks up changes made to tasks.json by another program (the MCP server) while the app is running.</summary>
+    private void WatchTasksFile(DispatcherQueue queue)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(TasksPath)!;
+            Directory.CreateDirectory(dir);
+            _reloadTimer = queue.CreateTimer();
+            _reloadTimer.Interval = TimeSpan.FromMilliseconds(350); // one burst of events becomes one reload
+            _reloadTimer.IsRepeating = false;
+            _reloadTimer.Tick += (_, _) => ReloadFromDisk();
+
+            _watcher = new FileSystemWatcher(dir, "tasks.json") { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
+            void Poke(object? sender, EventArgs e) => queue.TryEnqueue(() =>
+            {
+                _reloadTimer?.Stop();
+                _reloadTimer?.Start();
+            });
+            _watcher.Changed += Poke;
+            _watcher.Created += Poke;
+            _watcher.Renamed += Poke;
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not watch tasks.json; changes by other programs will show after a restart", ex);
+        }
+    }
+
+    private void ReloadFromDisk()
+    {
+        try
+        {
+            List<TaskItem> loaded;
+            using (var gate = TaskFileLock.Acquire(TasksPath, TimeSpan.FromSeconds(3)))
+            {
+                loaded = _store.Load();
+                if (_store.RecoveredFromCorruption)
+                {
+                    // Never let an unreadable file wipe what we hold: put our copy back.
+                    Log.Error("tasks.json was unreadable after an outside change; restored it from memory");
+                    _store.Save(_tasks.Items);
+                    return;
+                }
+            }
+
+            if (TaskSnapshot.Same(_tasks.Items, loaded))
+            {
+                return; // our own save, or no real change
+            }
+
+            Log.Info($"tasks.json changed outside the app; reloading ({loaded.Count} tasks)");
+            _reloading = true;
+            try
+            {
+                _tasks.ReplaceItems(loaded);
+            }
+            finally
+            {
+                _reloading = false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not reload tasks", ex);
+        }
     }
 
     private void CheckReminders()

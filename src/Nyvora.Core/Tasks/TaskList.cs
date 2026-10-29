@@ -18,6 +18,18 @@ public sealed class TaskList
         Normalize(); // migrates files from before statuses and tags existed
     }
 
+    /// <summary>
+    /// Swaps in tasks changed by another program (the MCP server) and raises <see cref="Changed"/> so views redraw.
+    /// The caller decides whether that change should be written back (it normally should not).
+    /// </summary>
+    public void ReplaceItems(IEnumerable<TaskItem> items)
+    {
+        _items.Clear();
+        _items.AddRange(items);
+        Normalize();
+        Changed?.Invoke();
+    }
+
     public StatusSet Statuses => _statuses;
 
     public TagSet Tags => _tags;

@@ -37,6 +37,14 @@ jobs:
       - name: Publish app (development artifact)
         run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -o artifacts/Nyvora-win-x64
 
+      # The MCP server ships next to the app and shares its bundled runtime.
+      - name: Publish MCP server (into the app folder)
+        run: dotnet publish src/Nyvora.Mcp/Nyvora.Mcp.csproj -c Release -r win-x64 --self-contained true -o artifacts/Nyvora-win-x64
+
+      - name: Test the MCP server over stdio
+        shell: pwsh
+        run: ./tests/mcp/Test-Mcp.ps1 -Exe "$PWD\artifacts\Nyvora-win-x64\nyvora-mcp.exe"
+
       # A machine without the .NET runtime must still start the app: the runtime has to be inside the folder.
       - name: Check the publish bundles the .NET runtime
         shell: pwsh

@@ -46,6 +46,66 @@ internal static class ClipboardText
         box.SelectionLength = 0;
     }
 
+    /// <summary>Puts text on the clipboard through Win32 (same reasoning as paste). False if it could not.</summary>
+    public static bool TrySet(string text)
+    {
+        var opened = false;
+        for (var attempt = 0; attempt < 4 && !opened; attempt++)
+        {
+            opened = OpenClipboard(0);
+            if (!opened)
+            {
+                Thread.Sleep(10);
+            }
+        }
+
+        if (!opened)
+        {
+            Log.Error($"Copy: could not open the clipboard (Win32 error {Marshal.GetLastWin32Error()})");
+            return false;
+        }
+
+        try
+        {
+            EmptyClipboard();
+            var bytes = (nuint)((text.Length + 1) * 2);
+            var mem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+            if (mem == 0)
+            {
+                return false;
+            }
+
+            var ptr = GlobalLock(mem);
+            if (ptr == 0)
+            {
+                GlobalFree(mem);
+                return false;
+            }
+
+            try
+            {
+                var chars = (text + "\0").ToCharArray();
+                Marshal.Copy(chars, 0, ptr, chars.Length);
+            }
+            finally
+            {
+                GlobalUnlock(mem);
+            }
+
+            if (SetClipboardData(CF_UNICODETEXT, mem) == 0)
+            {
+                GlobalFree(mem); // the system only takes ownership on success
+                return false;
+            }
+
+            return true;
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
     private static string? TryRead()
     {
         // Another process can hold the clipboard open for a moment; a few short retries is the documented approach.

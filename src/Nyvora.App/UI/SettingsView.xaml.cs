@@ -23,6 +23,7 @@ public sealed partial class SettingsView : UserControl
     internal void Attach(StatusSet statuses, TagSet tags, UpdateService updates, bool alwaysOnTop, bool statusReminder, bool launchAtSignIn)
     {
         TagsEditor.Attach(tags);
+        McpConfig.Text = McpConfigText();
         TopToggle.IsChecked = alwaysOnTop;
         ReminderToggle.IsChecked = statusReminder;
         StartupToggle.IsChecked = launchAtSignIn;
@@ -36,6 +37,19 @@ public sealed partial class SettingsView : UserControl
         _updates = updates;
         _updates.Changed += RefreshUpdate;
         RefreshUpdate();
+    }
+
+    private static string McpConfigText()
+    {
+        var dir = Path.GetDirectoryName(Environment.ProcessPath) ?? "";
+        var exe = Path.Combine(dir, "nyvora-mcp.exe").Replace("\\", "\\\\");
+        return "{\n  \"mcpServers\": {\n    \"nyvora\": {\n      \"command\": \"" + exe + "\",\n      \"args\": []\n    }\n  }\n}";
+    }
+
+    private void OnCopyMcp(object sender, RoutedEventArgs e)
+    {
+        var ok = ClipboardText.TrySet(McpConfig.Text);
+        McpCopy.Content = ok ? "Copied" : "Could not copy; select the text instead";
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();

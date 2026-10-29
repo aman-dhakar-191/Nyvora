@@ -85,6 +85,21 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GlobalUnlock(nint hMem);
 
+    public const uint GMEM_MOVEABLE = 0x0002;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern nint GlobalAlloc(uint flags, nuint bytes);
+
+    [DllImport("kernel32.dll")]
+    public static extern nint GlobalFree(nint hMem);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EmptyClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern nint SetClipboardData(uint format, nint hMem);
+
     [DllImport("comctl32.dll")]
     public static extern bool SetWindowSubclass(nint hWnd, SubclassProc proc, nuint id, nuint refData);
 

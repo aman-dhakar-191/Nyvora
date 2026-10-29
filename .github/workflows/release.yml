@@ -69,6 +69,9 @@ jobs:
       - name: Publish (win-x64, self-contained)
         run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -p:Version=${{ env.VERSION }} -o artifacts/Nyvora-win-x64
 
+      - name: Publish MCP server (into the app folder)
+        run: dotnet publish src/Nyvora.Mcp/Nyvora.Mcp.csproj -c Release -r win-x64 --self-contained true -o artifacts/Nyvora-win-x64 -p:Version=${{ env.VERSION }}
+
       - name: Zip and checksum
         shell: pwsh
         run: |

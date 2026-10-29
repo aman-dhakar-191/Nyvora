@@ -50,3 +50,16 @@ In GitHub go to **Actions → Release → Run workflow** and choose **patch**, *
 ## Known limitations
 
 See [docs/ROADMAP.md](docs/ROADMAP.md#known-limitations). In short: the visual and native-window behavior was written without being run on Windows yet and needs the manual checklist; edges are clipped with a window region (not anti-aliased); only the primary display is used.
+
+## AI agents (MCP server)
+
+Nyvora ships `nyvora-mcp.exe` next to `Nyvora.exe`: a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so any MCP-capable AI app (Claude Desktop, Cursor, VS Code, Claude Code...) can work with your tasks. Settings → "AI agents (MCP)" shows a ready-to-paste config with the right path and a Copy button.
+
+- **Read-only by default.** Tools: `list_tasks` (filters: open, done, due, today, all; tag; status), `list_statuses`, `list_tags`.
+- **`--allow-write`** (add it to the `args` in the agent's config) enables `add_task`, `complete_task`, `reopen_task`, `set_status`, `set_reminder`, `rename_task`, `tag_task`. **`--allow-delete`** additionally enables `delete_task`. Tools that are not allowed are not listed, and calling one returns an error.
+- Statuses and tags are read from `settings.json`; the server cannot create or edit them (`tag_task` uses tags you already made).
+- Local only: it talks over stdin/stdout, opens no network port, and sends nothing anywhere.
+- Changes made by an agent appear in the running app within about half a second (the app watches `tasks.json`). A cross-process lock keeps the two from interleaving, but if you edit a task in the app at the very same moment an agent edits the file, the later save wins.
+- Task titles are text an agent will read; do not connect an agent you do not trust, and think before enabling write access for one that also reads untrusted content.
+- `--data-dir PATH` points it at another data folder (used by CI).
+
