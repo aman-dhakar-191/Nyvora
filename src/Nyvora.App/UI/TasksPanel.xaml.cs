@@ -204,6 +204,22 @@ public sealed partial class TasksPanel : UserControl
             e.Handled = true;
             BeginTitleEdit(row, title, item);
         };
+        // A selectable TextBlock consumes its own double-click (it selects a word), so DoubleTapped alone never
+        // arrives. Watch raw presses, including handled ones, and spot the second click ourselves.
+        var lastPress = DateTime.MinValue;
+        title.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) =>
+        {
+            var now = DateTime.UtcNow;
+            if ((now - lastPress).TotalMilliseconds < 450)
+            {
+                lastPress = DateTime.MinValue;
+                BeginTitleEdit(row, title, item);
+            }
+            else
+            {
+                lastPress = now;
+            }
+        }), true);
         Grid.SetColumn(title, 2);
         row.Children.Add(title);
 
@@ -325,8 +341,28 @@ public sealed partial class TasksPanel : UserControl
         };
         ToolTipService.SetToolTip(delete, "Delete task");
         delete.Click += (_, _) => _tasks.Remove(item.Id);
-        Grid.SetColumn(delete, 6);
-        row.Children.Add(delete);
+
+        // Double-click edits too, but a visible pencil is the dependable way in.
+        var edit = new HandButton
+        {
+            Content = new FontIcon { Glyph = "\uE70F", FontSize = 12 },
+            Padding = new Thickness(6),
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+        };
+        ToolTipService.SetToolTip(edit, "Edit title");
+        edit.Click += (_, _) => BeginTitleEdit(row, title, item);
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        if (!item.Done)
+        {
+            actions.Children.Add(edit);
+            reveal.Add(edit);
+        }
+
+        actions.Children.Add(delete);
+        Grid.SetColumn(actions, 6);
+        row.Children.Add(actions);
         reveal.Add(delete);
 
         foreach (var el in reveal)
@@ -371,6 +407,11 @@ public sealed partial class TasksPanel : UserControl
     /// <summary>Swaps the title for a text box: Enter or clicking away saves, Esc cancels.</summary>
     private void BeginTitleEdit(Grid row, TextBlock title, TaskItem item)
     {
+        if (!row.Children.Contains(title))
+        {
+            return; // already editing (double-click can arrive through two paths)
+        }
+
         var box = new TextBox { Text = item.Title, MaxLength = TaskList.MaxTitleLength, VerticalAlignment = VerticalAlignment.Center };
         ClipboardText.Attach(box);
         row.Children.Remove(title);
