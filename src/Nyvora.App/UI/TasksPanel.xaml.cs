@@ -34,6 +34,83 @@ public sealed partial class TasksPanel : UserControl
     /// <summary>The gear (or the update notice) asks the window to toggle the settings panel.</summary>
     public event Action? SettingsRequested;
 
+    /// <summary>The focus card was dismissed (nothing left to show) or the user asked for the full list.</summary>
+    public event Action? FocusEnded;
+
+    public event Action? FocusOpenAllRequested;
+
+    private readonly List<Guid> _focusQueue = new();
+
+    public bool IsFocusing => _focusQueue.Count > 0;
+
+    /// <summary>Shows only these tasks, one at a time, as a card instead of the list.</summary>
+    public void ShowFocus(IEnumerable<Guid> ids)
+    {
+        _focusQueue.Clear();
+        _focusQueue.AddRange(ids);
+        RenderFocus();
+    }
+
+    public void ClearFocus()
+    {
+        _focusQueue.Clear();
+        FocusView.Visibility = Visibility.Collapsed;
+        TasksView.Visibility = Visibility.Visible;
+    }
+
+    private TaskItem? FocusedItem() =>
+        _focusQueue.Count == 0 ? null : _tasks.Items.FirstOrDefault(i => i.Id == _focusQueue[0]);
+
+    private void RenderFocus()
+    {
+        // Skip tasks that were finished, deleted or snoozed since the card was queued.
+        var now = DateTimeOffset.Now;
+        while (_focusQueue.Count > 0 && !(FocusedItem() is { } t && TaskList.IsDue(t, now)))
+        {
+            _focusQueue.RemoveAt(0);
+        }
+
+        if (FocusedItem() is not { } item)
+        {
+            ClearFocus();
+            FocusEnded?.Invoke();
+            return;
+        }
+
+        TasksView.Visibility = Visibility.Collapsed;
+        FocusView.Visibility = Visibility.Visible;
+        FocusKicker.Text = item.RemindAt is { } at ? "Reminder · " + Reminders.FormatDue(at, now) : "Reminder";
+        FocusMore.Text = _focusQueue.Count > 1 ? $"+{_focusQueue.Count - 1} more" : "";
+        FocusTitle.Text = item.Title;
+        FocusTags.Children.Clear();
+        foreach (var tag in _tasks.TagsOf(item).Take(4))
+        {
+            FocusTags.Children.Add(TagVisuals.Chip(tag));
+        }
+    }
+
+    private void OnFocusDone(object sender, RoutedEventArgs e)
+    {
+        if (FocusedItem() is { } item)
+        {
+            _tasks.Toggle(item.Id); // Changed -> Refresh -> RenderFocus moves on
+        }
+    }
+
+    private void OnFocusSnooze(object sender, RoutedEventArgs e)
+    {
+        if (FocusedItem() is { } item)
+        {
+            _tasks.Snooze(item.Id, DateTimeOffset.Now, Reminders.SnoozeDuration);
+        }
+    }
+
+    private void OnFocusOpenAll(object sender, RoutedEventArgs e)
+    {
+        ClearFocus();
+        FocusOpenAllRequested?.Invoke();
+    }
+
     private string? _nudge;
 
     /// <summary>Shows a banner above the task list (cleared by <see cref="ClearNudge"/> when the pill collapses).</summary>
@@ -85,6 +162,11 @@ public sealed partial class TasksPanel : UserControl
 
     private void Refresh()
     {
+        if (_focusQueue.Count > 0)
+        {
+            RenderFocus();
+        }
+
         var now = DateTimeOffset.Now;
         var due = _tasks.DueCount(now);
         var later = _tasks.LaterTodayCount(now);

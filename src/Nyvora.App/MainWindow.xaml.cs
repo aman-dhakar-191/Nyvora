@@ -43,6 +43,10 @@ public sealed partial class MainWindow : Window
     private double _side;      // current width of the settings panel (DIPs)
     private double _sideWidth; // width it has when fully open
     private bool _passiveExpand;
+    private bool _focusMode; // a reminder card is showing instead of the list
+    private static readonly SizeD FocusSize = new(380, 200);
+
+    private SizeD ExpandedTarget => _focusMode ? FocusSize : _expandedSize;
     private int _frames;
     private bool _focusInputWhenOpen;
 
@@ -100,6 +104,22 @@ public sealed partial class MainWindow : Window
             _host.SetAlwaysOnTop(on);
             _settings.Current.AlwaysOnTop = on;
             _settings.Save();
+        };
+        Panel.FocusEnded += () =>
+        {
+            if (_focusMode)
+            {
+                _focusMode = false;
+                Collapse("reminder handled");
+            }
+        };
+        Panel.FocusOpenAllRequested += () =>
+        {
+            _focusMode = false;
+            ApplyPanelSize();
+            Start(_expandedSize, PillAnimator.SideDuration); // grow from the card to the full list
+            _host.Focus();
+            Panel.FocusInput();
         };
         Panel.CollapseRequested += () => Collapse("collapse button");
         Panel.QuitRequested += Close;
@@ -216,6 +236,14 @@ public sealed partial class MainWindow : Window
         }
 
         Log.Info($"{fired.Count} reminder(s) due");
+        if (_machine.State is PillState.Resting or PillState.Collapsing)
+        {
+            // Closed pill: show just the reminder as a card. If the list is already open, leave it alone.
+            _focusMode = true;
+            Panel.ShowFocus(fired.Select(f => f.Id));
+            ApplyPanelSize();
+        }
+
         ExpandPassively();
     }
 
@@ -259,8 +287,8 @@ public sealed partial class MainWindow : Window
     /// <summary>The panel keeps a fixed size (the target) so its layout never reflows while the window animates.</summary>
     private void ApplyPanelSize()
     {
-        Panel.Width = _expandedSize.Width;
-        Panel.Height = _expandedSize.Height;
+        Panel.Width = ExpandedTarget.Width;
+        Panel.Height = ExpandedTarget.Height;
         Side.Width = _sideWidth;
         Side.Height = _expandedSize.Height;
         Side.Margin = new Thickness(_expandedSize.Width, 0, 0, 0);
@@ -394,7 +422,7 @@ public sealed partial class MainWindow : Window
                 // The display may have changed since the size was chosen.
                 _expandedSize = ExpandedSizing.Clamp(_expandedSize, _host.AvailableSizeDip);
                 ApplyPanelSize();
-                Start(_expandedSize, PillAnimator.ExpandDuration);
+                Start(ExpandedTarget, PillAnimator.ExpandDuration);
                 break;
             case PillState.Collapsing:
                 if (_settingsOpen || _side > 0)
@@ -407,6 +435,8 @@ public sealed partial class MainWindow : Window
                 break;
             case PillState.Resting:
                 Panel.ClearNudge();
+                Panel.ClearFocus();
+                _focusMode = false;
                 _settingsOpen = false;
                 _side = 0;
                 _sideAnimator = null;
@@ -529,7 +559,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Cross-fades resting/expanded content from the current size; no layout depends on window size.</summary>
     private void UpdateContent()
     {
-        var t = PillAnimator.ExpansionProgress(_current, _expandedSize);
+        var t = PillAnimator.ExpansionProgress(_current, ExpandedTarget);
         RestingContent.Opacity = Math.Clamp(1 - t * 3, 0, 1);
         RestingContent.IsHitTestVisible = _machine.State is PillState.Resting or PillState.Collapsing && t < 0.5;
         Panel.Opacity = Math.Clamp((t - 0.45) / 0.55, 0, 1);
@@ -542,6 +572,6 @@ public sealed partial class MainWindow : Window
 
         // The grip resizes around the pill's center, which no longer holds while the side panel is out.
         Grip.Opacity = Panel.Opacity * (1 - side);
-        Grip.IsHitTestVisible = _machine.State is PillState.Expanded && !_settingsOpen && side == 0;
+        Grip.IsHitTestVisible = _machine.State is PillState.Expanded && !_focusMode && !_settingsOpen && side == 0;
     }
 }

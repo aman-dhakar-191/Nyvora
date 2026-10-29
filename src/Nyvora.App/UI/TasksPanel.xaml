@@ -5,6 +5,7 @@
     xmlns:ui="using:Nyvora.App.UI"
     RequestedTheme="Dark">
 
+    <Grid>
     <Grid x:Name="TasksView" Padding="22,18,22,14" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -77,5 +78,49 @@
         <ui:HandButton x:Name="UpdateNotice" Grid.Row="4" Visibility="Collapsed" Click="OnSettingsClick"
                        Padding="8,3" FontSize="12" Foreground="#FF60A5FA" BorderThickness="0" Background="Transparent"
                        HorizontalAlignment="Left" ToolTipService.ToolTip="Open settings to install" />
+    </Grid>
+
+    <!-- Reminder focus card: replaces the list while a reminder is being shown on its own. -->
+    <Grid x:Name="FocusView" Visibility="Collapsed" Padding="22,18,22,16" RowSpacing="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="⏰" FontSize="14" VerticalAlignment="Center" />
+                <TextBlock x:Name="FocusKicker" FontSize="12" FontWeight="SemiBold" Foreground="#FFFBBF24"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="FocusMore" FontSize="12" Foreground="#FF8A8AA0" HorizontalAlignment="Right"
+                       VerticalAlignment="Center" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="6" VerticalAlignment="Center">
+                <TextBlock x:Name="FocusTitle" FontSize="20" FontWeight="SemiBold" Foreground="#FFF4F4F8"
+                           TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                <StackPanel x:Name="FocusTags" Orientation="Horizontal" Spacing="4" />
+            </StackPanel>
+        </ScrollViewer>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+            <ui:HandButton Click="OnFocusDone" Padding="14,6">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE73E;" FontSize="12" />
+                    <TextBlock Text="Done" />
+                </StackPanel>
+            </ui:HandButton>
+            <ui:HandButton Click="OnFocusSnooze" Padding="14,6" ToolTipService.ToolTip="Remind me again in 10 minutes">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="💤" FontSize="13" />
+                    <TextBlock Text="Snooze" />
+                </StackPanel>
+            </ui:HandButton>
+            <ui:HandButton Click="OnFocusOpenAll" Padding="12,6" Background="Transparent" BorderThickness="0"
+                           Foreground="#FF8A8AA0" HorizontalAlignment="Right" ToolTipService.ToolTip="Show the whole list">
+                <TextBlock Text="All tasks" />
+            </ui:HandButton>
+        </StackPanel>
+    </Grid>
     </Grid>
 </UserControl>
