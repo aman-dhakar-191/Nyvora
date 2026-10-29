@@ -35,7 +35,16 @@ jobs:
         run: ./tests/update-helper/Test-UpdateHelper.ps1
 
       - name: Publish app (development artifact)
-        run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 -p:Platform=x64 -o artifacts/Nyvora-win-x64
+        run: dotnet publish src/Nyvora.App/Nyvora.App.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -o artifacts/Nyvora-win-x64
+
+      # A machine without the .NET runtime must still start the app: the runtime has to be inside the folder.
+      - name: Check the publish bundles the .NET runtime
+        shell: pwsh
+        run: |
+          foreach ($f in 'coreclr.dll', 'hostfxr.dll', 'System.Private.CoreLib.dll') {
+            if (-not (Test-Path "artifacts/Nyvora-win-x64/$f")) { throw "Missing $f: the build is not self-contained" }
+          }
+          "Self-contained: runtime files present"
 
       - uses: actions/upload-artifact@v4
         with:

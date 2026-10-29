@@ -12,6 +12,9 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Bundle the .NET runtime too: WindowsAppSDKSelfContained covers only the Windows App SDK, so without this a
+         machine lacking the .NET 8 Desktop Runtime shows "You must install .NET Desktop Runtime". -->
+    <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
