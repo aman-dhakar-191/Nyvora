@@ -184,12 +184,13 @@ try {
   $settingsPath = Join-Path $env:APPDATA 'Nyvora\settings.json'
   $cfg = if (Test-Path $settingsPath) { Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json } else { [pscustomobject]@{} }
   $cfg | Add-Member -NotePropertyName CompactMode -NotePropertyValue $true -Force
+  $cfg | Add-Member -NotePropertyName Tags -NotePropertyValue @(@{ Id = 'work'; Name = 'work'; Color = 2 }, @{ Id = 'home'; Name = 'home'; Color = 5 }) -Force
   $cfg | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
   $nowUtc = (Get-Date).ToUniversalTime()
   $seed = @(
-    @{ Id = [guid]::NewGuid().ToString(); Title = 'Write the quarterly report and send it to everyone on the team'; Done = $false; Created = $nowUtc.ToString('o'); RemindAt = $nowUtc.AddHours(-2).ToString('o'); Notified = $true; Priority = 1; TagIds = @() },
+    @{ Id = [guid]::NewGuid().ToString(); Title = 'Write the quarterly report and send it to everyone on the team'; Done = $false; Created = $nowUtc.ToString('o'); RemindAt = $nowUtc.AddHours(-2).ToString('o'); Notified = $true; Priority = 1; TagIds = @('work', 'home') },
     @{ Id = [guid]::NewGuid().ToString(); Title = 'Short one'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 0; TagIds = @() },
-    @{ Id = [guid]::NewGuid().ToString(); Title = 'Call the dentist'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 2; TagIds = @() }
+    @{ Id = [guid]::NewGuid().ToString(); Title = 'Call the dentist'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 2; TagIds = @('home') }
   )
   ConvertTo-Json -InputObject $seed -Depth 5 | Set-Content -LiteralPath $tasksPath -Encoding UTF8
   $compactProc = Start-Process -FilePath $Exe -PassThru
@@ -202,6 +203,10 @@ try {
     $co = Get-Pill $compactProc
     Check ($co.W -gt 300 * $scale -and $co.W -lt 400 * $scale) 'compact layout opens narrower than the normal list' ("{0}x{1}" -f $co.W, $co.H)
     Shot 'compact'
+    # Hover the second row (a best guess at its position): the hover bar should appear over its right end.
+    [void][Win]::SetCursorPos([int]($co.L + 200 * $scale), [int]($co.T + 150 * $scale))
+    Start-Sleep -Milliseconds 700
+    Shot 'compact-hover'
   } else {
     Check $false 'compact layout opens narrower than the normal list' 'no pill'
   }

@@ -399,6 +399,7 @@ public sealed partial class TasksPanel : UserControl
     private bool _showDone;
 
     private bool _compact;
+    private const string HoverBarTag = "hover-actions";
 
     /// <summary>Compact layout: a status dot instead of the name, and the secondary controls on a line under the title.</summary>
     public void SetCompact(bool on)
@@ -418,13 +419,29 @@ public sealed partial class TasksPanel : UserControl
         // Secondary actions stay invisible (but keep their space, so nothing shifts) until the row is hovered or focused.
         var reveal = new List<UIElement>();
         var row = new Grid { ColumnSpacing = 6 };
-        // Compact: the title gets the whole width and the quiet controls move to their own line below it.
-        var meta = _compact ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 } : null;
-        void Place(FrameworkElement el, int column)
-        {
-            if (meta is not null)
+        // Compact is one line per task. What matters stays on the line (a status dot, small tag dots, the due time);
+        // everything else is in a bar that appears over the right end of the row while it is hovered.
+        var trail = _compact ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center } : null;
+        var hoverBar = _compact
+            ? new StackPanel
             {
-                meta.Children.Add(el);
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x17, 0x17, 0x1C)), // the row's hover color, opaque, so the title does not show through
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(6, 0, 0, 0),
+                Opacity = 0,
+                IsHitTestVisible = false,
+                Tag = HoverBarTag,
+                OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(120) },
+            }
+            : null;
+        void Place(FrameworkElement el, int column, bool inline = false)
+        {
+            if (trail is not null)
+            {
+                (inline ? trail : hoverBar!).Children.Add(el);
                 return;
             }
 
@@ -432,15 +449,20 @@ public sealed partial class TasksPanel : UserControl
             row.Children.Add(el);
         }
 
-        row.RowDefinitions.Add(new RowDefinition { MinHeight = _compact ? 32 : 38 });
+        row.RowDefinitions.Add(new RowDefinition { MinHeight = _compact ? 30 : 38 });
         row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // tags, aligned under the title
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(_compact ? 18 : 90) }); // fixed, so every title starts at the same x
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (var i = 0; i < (_compact ? 1 : 4); i++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        }
+
+        if (_compact)
+        {
+            row.Padding = new Thickness(7, 0, 0, 0); // room for the priority bar on the left edge
+        }
 
         var check = new HandCheckBox { IsChecked = item.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
         check.Click += (_, _) => _tasks.Toggle(item.Id);
@@ -460,7 +482,7 @@ public sealed partial class TasksPanel : UserControl
             TextDecorations = item.Done ? TextDecorations.Strikethrough : TextDecorations.None,
             IsTextSelectionEnabled = true, // drag to select, Ctrl+C to copy
         };
-        if (item.Priority != TaskPriority.None && !item.Done)
+        if (item.Priority != TaskPriority.None && !item.Done && !_compact)
         {
             // A colored dot in front of the title carries the priority at a glance.
             title.Text = "";
@@ -501,11 +523,6 @@ public sealed partial class TasksPanel : UserControl
             }
         }), true);
         Grid.SetColumn(title, 2);
-        if (meta is not null)
-        {
-            Grid.SetColumnSpan(title, 5); // the empty control columns would otherwise eat into the title's width
-        }
-
         row.Children.Add(title);
 
         // Hover shows the whole title, wrapped; leaving restores the trimmed single line.
@@ -535,6 +552,12 @@ public sealed partial class TasksPanel : UserControl
                 el.Opacity = 1;
             }
 
+            if (hoverBar is not null)
+            {
+                hoverBar.Opacity = 1;
+                hoverBar.IsHitTestVisible = true;
+            }
+
             expandTimer.Start();
         };
         row.PointerExited += (_, _) =>
@@ -546,6 +569,12 @@ public sealed partial class TasksPanel : UserControl
             foreach (var el in reveal)
             {
                 el.Opacity = 0;
+            }
+
+            if (hoverBar is not null)
+            {
+                hoverBar.Opacity = 0;
+                hoverBar.IsHitTestVisible = false;
             }
         };
 
@@ -590,7 +619,9 @@ public sealed partial class TasksPanel : UserControl
             {
                 Content = new TextBlock
                 {
-                    Text = item.RemindAt is { } at ? (isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now) : "⏰",
+                    Text = item.RemindAt is { } at
+                        ? (_compact ? "" : isDue ? "Due " : "⏰ ") + Reminders.FormatDue(at, now) // compact: the time alone, the amber pill says "due"
+                        : "⏰",
                     Opacity = item.RemindAt is null ? 0.55 : 1, // a quiet bell until a reminder exists
                     FontSize = 12,
                     Foreground = isDue ? DueBrush : TaskList.IsLaterToday(item, now) ? TodayBrush : MutedBrush,
@@ -610,7 +641,7 @@ public sealed partial class TasksPanel : UserControl
                 _editingTags = null;
                 Refresh();
             };
-            Place(when, 4);
+            Place(when, 4, inline: item.RemindAt is not null);
             if (item.RemindAt is null && _editingReminder != item.Id)
             {
                 reveal.Add(when);
@@ -704,16 +735,54 @@ public sealed partial class TasksPanel : UserControl
         var stack = new StackPanel { Spacing = 2 };
         stack.Children.Add(row);
 
-        if (meta is not null)
+        if (trail is not null)
         {
-            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // the tag chips go below the controls
-            Grid.SetRow(meta, 1);
-            Grid.SetColumn(meta, 2);
-            Grid.SetColumnSpan(meta, 5);
-            row.Children.Add(meta);
+            // Small tag dots, then the due time: the always-visible part of a compact row.
+            for (var i = Math.Min(itemTags.Count, 3) - 1; i >= 0; i--)
+            {
+                var dot = new Border
+                {
+                    Width = 7,
+                    Height = 7,
+                    CornerRadius = new CornerRadius(3.5),
+                    Background = new SolidColorBrush(TagVisuals.Of(itemTags[i].Color)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                ToolTipService.SetToolTip(dot, itemTags[i].Name);
+                trail.Children.Insert(0, dot);
+            }
+
+            Grid.SetColumn(trail, 3);
+            row.Children.Add(trail);
+
+            // The hover bar sits over the title's right end and the trail; it is on top, so it is added last.
+            Grid.SetColumn(hoverBar!, 2);
+            Grid.SetColumnSpan(hoverBar!, 2);
+            row.Children.Add(hoverBar!);
+            hoverBar!.GotFocus += (_, _) =>
+            {
+                hoverBar.Opacity = 1;
+                hoverBar.IsHitTestVisible = true;
+            };
+
+            if (item.Priority != TaskPriority.None && !item.Done)
+            {
+                var bar = new Border
+                {
+                    Width = 3,
+                    CornerRadius = new CornerRadius(1.5),
+                    Background = new SolidColorBrush(PriorityColor(item.Priority)),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Margin = new Thickness(-7, 6, 0, 6), // hangs into the row's left padding
+                };
+                ToolTipService.SetToolTip(bar, $"Priority: {TaskPriorities.Name(item.Priority)}");
+                Grid.SetColumnSpan(bar, 4);
+                row.Children.Add(bar);
+            }
         }
 
-        if (itemTags.Count > 0)
+        if (!_compact && itemTags.Count > 0)
         {
             // Under the title (same grid, so it lines up exactly); long lists collapse into "+N".
             var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 0, 0, 4) };
@@ -727,7 +796,7 @@ public sealed partial class TasksPanel : UserControl
                 line.Children.Add(new TextBlock { Text = $"+{itemTags.Count - 4}", FontSize = 11, Foreground = MutedBrush, VerticalAlignment = VerticalAlignment.Center });
             }
 
-            Grid.SetRow(line, meta is null ? 1 : 2);
+            Grid.SetRow(line, 1);
             Grid.SetColumn(line, 2);
             Grid.SetColumnSpan(line, 5);
             row.Children.Add(line);
@@ -775,7 +844,7 @@ public sealed partial class TasksPanel : UserControl
         // The editor takes the title's place plus the room of the row's buttons, which are hidden while editing.
         foreach (var el in row.Children.OfType<FrameworkElement>().ToList())
         {
-            if (Grid.GetRow(el) == 0 && Grid.GetColumn(el) >= 3)
+            if (Grid.GetRow(el) == 0 && (Grid.GetColumn(el) >= 3 || Equals(el.Tag, HoverBarTag)))
             {
                 el.Visibility = Visibility.Collapsed;
             }
@@ -1100,13 +1169,14 @@ public sealed partial class TasksPanel : UserControl
             // A small colored dot; the name is in the tooltip and clicking still steps the status.
             var dot = new HandButton
             {
-                Width = 12,
-                Height = 12,
+                // An 18 px target around a 10 px dot: easy to hit, still quiet.
+                Width = 18,
+                Height = 18,
                 MinWidth = 0,
                 MinHeight = 0,
                 Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(color),
+                Content = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(color) },
+                Background = new SolidColorBrush(Colors.Transparent),
                 BorderThickness = new Thickness(0),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
