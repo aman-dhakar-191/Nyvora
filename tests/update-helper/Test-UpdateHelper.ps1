@@ -33,7 +33,7 @@ function Run-Helper($case, [string]$exe, [string]$exeArgs, [int]$health) {
 
 function Read-Log($case) { if (Test-Path -LiteralPath $case.Log) { Get-Content -LiteralPath $case.Log -Raw } else { '' } }
 function Text($path) { (Get-Content -LiteralPath $path -Raw).Trim() }
-function Stop-Pings { Get-Process -Name ping -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
+function Stop-Pings { Get-Process -Name ping, sibling -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue }
 
 $ping = Join-Path $env:SystemRoot 'System32\PING.EXE'
 $cmd = Join-Path $env:SystemRoot 'System32\cmd.exe'
