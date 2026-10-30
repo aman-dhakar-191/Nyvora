@@ -47,7 +47,5 @@
             </StackPanel>
         </ui:HandGrid>
 
-        <!-- Subtle 1px edge; rounded clipping comes from the window region. -->
-        <Border BorderBrush="#33FFFFFF" BorderThickness="1" IsHitTestVisible="False" />
     </Grid>
 </Window>
