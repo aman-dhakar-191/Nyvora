@@ -51,6 +51,11 @@ public partial class App : Application
             Log.Info($"Copied {string.Join(", ", moved)} from {DataFolders.Local} to {DataFolders.Roaming}");
         }
 
+        if (DataFolders.Active() != DataFolders.Roaming)
+        {
+            Log.Error($"Could not copy your data to {DataFolders.Roaming}; using {DataFolders.Local} for now so nothing is lost");
+        }
+
         _window = new MainWindow();
         _window.Show();
         ListenForSecondLaunch(DispatcherQueue.GetForCurrentThread());

@@ -57,7 +57,7 @@ Download `Nyvora-Setup-vX.Y.Z-x64.exe` from the latest release and run it. It in
 
 **Where things live**
 - Program files: `%LOCALAPPDATA%\Programs\Nyvora` (installer) or wherever you unzipped.
-- Your data, in Roaming: `%APPDATA%\Nyvora\tasks.json` and `settings.json`. Install, update and uninstall never touch them. Versions before this one kept them in `%LOCALAPPDATA%\Nyvora`; on first start they are copied to Roaming and the old copies are left as a backup.
+- Your data, in Roaming: `%APPDATA%\Nyvora\tasks.json` and `settings.json`. Install, update and uninstall never touch them. Versions before this one kept them in `%LOCALAPPDATA%\Nyvora`; on first start they are **copied** to Roaming (never moved or deleted: the old files stay as a backup, and if the copy fails Nyvora keeps using the old folder so nothing disappears). Close all running Nyvora copies before updating, because an old copy keeps writing to the old folder.
 - Disposable and machine-specific files, in Local: `%LOCALAPPDATA%\Nyvora\nyvora.log`, `updates\` and `rollback\`.
 
 ## Shortcuts and single instance

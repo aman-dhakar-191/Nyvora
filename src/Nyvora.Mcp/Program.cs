@@ -35,8 +35,8 @@ for (var i = 0; i < args.Length; i++)
 
 if (dataDir is null)
 {
-    dataDir = Nyvora.Core.Storage.DataFolders.Roaming;
     Nyvora.Core.Storage.DataFolders.MigrateFromLocal(); // the app may not have run since the data moved
+    dataDir = Nyvora.Core.Storage.DataFolders.Active();
 }
 var version = (Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0").Split('+')[0];
 

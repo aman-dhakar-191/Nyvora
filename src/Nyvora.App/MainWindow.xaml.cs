@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _reminderTimer;
     private readonly Stopwatch _clock = new();
     private readonly Stopwatch _sideClock = new();
-    private static readonly string TasksPath = Path.Combine(DataFolders.Roaming, "tasks.json");
+    private static readonly string TasksPath = Path.Combine(DataFolders.Active(), "tasks.json");
 
     private readonly JsonTaskStore _store = new(TasksPath);
     private FileSystemWatcher? _watcher;

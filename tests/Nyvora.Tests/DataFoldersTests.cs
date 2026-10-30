@@ -49,6 +49,40 @@ public sealed class DataFoldersTests : IDisposable
     }
 
     [Fact]
+    public void MigratedTasksSurviveARoundTripUnchanged()
+    {
+        var now = new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero);
+        var tasks = new List<Nyvora.Core.Tasks.TaskItem>
+        {
+            new() { Id = Guid.NewGuid(), Title = "Keep me", Created = now, RemindAt = now.AddHours(2), StatusId = "doing", TagIds = new List<string> { "t1" } },
+            new() { Id = Guid.NewGuid(), Title = "Done one", Created = now, Done = true, StatusId = "done" },
+        };
+        new Nyvora.Core.Tasks.JsonTaskStore(Path.Combine(Local, "tasks.json")).Save(tasks);
+
+        DataFolders.MigrateFromLocal(Roaming, Local);
+        var loaded = new Nyvora.Core.Tasks.JsonTaskStore(Path.Combine(Roaming, "tasks.json")).Load();
+
+        Assert.True(Nyvora.Core.Tasks.TaskSnapshot.Same(tasks, loaded));
+        Assert.Equal(File.ReadAllText(Path.Combine(Local, "tasks.json")), File.ReadAllText(Path.Combine(Roaming, "tasks.json")));
+    }
+
+    [Fact]
+    public void ActiveFolderFallsBackToLocalWhileDataExistsOnlyThere()
+    {
+        File.WriteAllText(Path.Combine(Local, "tasks.json"), "[]");
+        Assert.Equal(Local, DataFolders.Active(Roaming, Local)); // copy has not happened (or failed)
+
+        DataFolders.MigrateFromLocal(Roaming, Local);
+        Assert.Equal(Roaming, DataFolders.Active(Roaming, Local));
+    }
+
+    [Fact]
+    public void ActiveFolderIsRoamingForANewInstall()
+    {
+        Assert.Equal(Roaming, DataFolders.Active(Roaming, Local));
+    }
+
+    [Fact]
     public void RoamingAndLocalAreDifferentFolders()
     {
         Assert.NotEqual(DataFolders.Roaming, DataFolders.Local);
