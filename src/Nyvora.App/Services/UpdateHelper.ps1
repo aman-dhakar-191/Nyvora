@@ -4,7 +4,7 @@
 # Inputs (environment variables): NYVORA_PID, NYVORA_STAGE, NYVORA_DEST, NYVORA_EXE, NYVORA_TARGET,
 # NYVORA_BACKUP, NYVORA_LOG; optional NYVORA_EXE_ARGS and NYVORA_HEALTH_SECONDS (default 8).
 #
-# Order of events: back up the install folder, copy the new files over it, start the new version, and give it a
+# Order of events: stop anything still running from the install folder, back up the install folder, copy the new files over it, start the new version, and give it a
 # few seconds to prove it stays up. Any failure puts the backup back, so a bad update never leaves a broken install.
 # robocopy exit codes below 8 mean success.
 $ErrorActionPreference = 'Stop'
@@ -51,10 +51,27 @@ function Restore-Backup {
   return $true
 }
 
+# Windows will not overwrite a program file while that program runs. Besides Nyvora itself, other things run from the
+# install folder (the MCP server an AI app started, a second copy), so stop whatever runs from here before copying.
+function Stop-InstallProcesses {
+  try {
+    $prefix = $dest.TrimEnd('\') + '\'
+    $procs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+      $_.Id -ne $PID -and $_.Path -and $_.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)
+    })
+    foreach ($p in $procs) {
+      Log ('stopping ' + $p.ProcessName + ' (pid ' + $p.Id + ') because it runs from the install folder')
+      try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { Log ('could not stop ' + $p.ProcessName + ': ' + $_.Exception.Message) }
+    }
+    if ($procs.Count -gt 0) { Wait-Process -Id @($procs | ForEach-Object { $_.Id }) -Timeout 15 -ErrorAction SilentlyContinue }
+  } catch { Log ('could not check for programs running from the install folder: ' + $_.Exception.Message) }
+}
+
 $backedUp = $false
 $copied = $false
 try {
   if ($env:NYVORA_PID) { Wait-Process -Id ([int]$env:NYVORA_PID) -Timeout 30 -ErrorAction SilentlyContinue }
+  Stop-InstallProcesses
 
   if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
   $c = Copy-Tree $dest $backup '/E /IS /IT'

@@ -1,6 +1,6 @@
 # Exercises src/Nyvora.App/Services/UpdateHelper.ps1 the way the app runs it (Windows PowerShell, -EncodedCommand)
 # against throwaway folders: a good update, a locked file during the copy, a locked file during the backup,
-# and a new version that crashes on start.
+# a program running from the install folder, and a new version that crashes on start.
 $ErrorActionPreference = 'Stop'
 $helper = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\src\Nyvora.App\Services\UpdateHelper.ps1') -Raw
 $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($helper))
@@ -69,6 +69,22 @@ try {
   Check ($log -match 'backup failed') 'log says the backup failed'
   Check ((Text (Join-Path $c.Dest 'Nyvora.exe')) -eq 'old-exe') 'install folder was not modified'
   Check (-not (Test-Path (Join-Path $c.Dest 'added.txt'))) 'nothing from the update was copied'
+  Stop-Pings
+
+  Write-Host 'Case 5: another program runs from the install folder (like the MCP server) -> it is stopped, update succeeds'
+  $c = New-Case 'running-sibling'
+  Copy-Item -LiteralPath $ping -Destination (Join-Path $c.Dest 'sibling.exe')
+  Set-Content -LiteralPath (Join-Path $c.Stage 'sibling.exe') -Value 'new-sibling'
+  $sibling = Start-Process -FilePath (Join-Path $c.Dest 'sibling.exe') -ArgumentList '-n 120 127.0.0.1' -PassThru -WindowStyle Hidden
+  Start-Sleep -Milliseconds 800
+  Check (-not $sibling.HasExited) 'the sibling program is running from the install folder'
+  Run-Helper $c $ping '-n 40 127.0.0.1' 3
+  $log = Read-Log $c
+  Check ($log -match 'stopping sibling') 'log says it stopped the sibling'
+  Check ($sibling.HasExited) 'the sibling program was stopped'
+  Check ($log -match 'updated to v9\.9\.9') 'log says it updated'
+  Check ((Text (Join-Path $c.Dest 'sibling.exe')) -eq 'new-sibling') 'the sibling file was replaced'
+  Check ((Text (Join-Path $c.Dest 'Nyvora.exe')) -eq 'new-exe') 'new files are installed'
   Stop-Pings
 
   Write-Host 'Case 4: the new version crashes on start -> roll back'
