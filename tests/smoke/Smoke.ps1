@@ -216,8 +216,13 @@ try {
     $co = Get-Pill $compactProc
     Check ($co.W -gt 300 * $scale -and $co.W -lt 400 * $scale) 'compact layout opens narrower than the normal list' ("{0}x{1}" -f $co.W, $co.H)
     Shot 'compact'
-    # Hover the second row (a best guess at its position): the hover bar should appear over its right end.
-    [void][Win]::SetCursorPos([int]($co.L + 200 * $scale), [int]($co.T + 150 * $scale))
+    # Hover the first task row: the hover bar should appear over its right end. SetCursorPos alone does not make Windows
+    # send mouse-move messages to the window, so nudge the mouse with real (relative) movement as well.
+    [void][Win]::SetCursorPos([int]($co.L + 200 * $scale), [int]($co.T + 152 * $scale))
+    Start-Sleep -Milliseconds 150
+    [Win]::mouse_event(0x0001, 1, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 80
+    [Win]::mouse_event(0x0001, 1, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 80
+    [Win]::mouse_event(0x0001, 1, 0, 0, [UIntPtr]::Zero)
     Start-Sleep -Milliseconds 700
     Shot 'compact-hover'
   } else {
