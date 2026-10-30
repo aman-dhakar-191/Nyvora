@@ -24,6 +24,7 @@ public sealed partial class SettingsView : UserControl
     {
         TagsEditor.Attach(tags);
         McpConfig.Text = McpConfigText();
+        RefreshShortcutButton();
         TopToggle.IsChecked = alwaysOnTop;
         ReminderToggle.IsChecked = statusReminder;
         StartupToggle.IsChecked = launchAtSignIn;
@@ -51,6 +52,34 @@ public sealed partial class SettingsView : UserControl
         var ok = ClipboardText.TrySet(McpConfig.Text);
         McpCopy.Content = ok ? "Copied" : "Could not copy; select the text instead";
     }
+
+    private void RefreshShortcutButton() =>
+        DesktopShortcutButton.Content = StartupService.DesktopShortcutExists ? "Remove desktop shortcut" : "Add desktop shortcut";
+
+    private async void OnDesktopShortcut(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            DesktopShortcutButton.IsEnabled = false;
+            var want = !StartupService.DesktopShortcutExists;
+            var ok = await StartupService.SetDesktopShortcutAsync(want);
+            RefreshShortcutButton();
+            if (!ok)
+            {
+                DesktopShortcutButton.Content = "Could not change it; see the log";
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Desktop shortcut action failed", ex);
+        }
+        finally
+        {
+            DesktopShortcutButton.IsEnabled = true;
+        }
+    }
+
+    private void OnRevealStartMenu(object sender, RoutedEventArgs e) => StartupService.RevealStartMenuShortcut();
 
     private void OnOpenLogs(object sender, RoutedEventArgs e)
     {

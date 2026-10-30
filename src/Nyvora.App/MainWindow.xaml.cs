@@ -179,6 +179,15 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    /// <summary>Another launch of the app asked this copy to open; behaves like clicking the pill.</summary>
+    public void ShowFromSecondLaunch()
+    {
+        if (_machine.State is PillState.Resting or PillState.Collapsing)
+        {
+            _machine.RequestExpand();
+        }
+    }
+
     public void Show()
     {
         _host.Show();

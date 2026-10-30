@@ -157,6 +157,18 @@ try {
   Start-Sleep -Milliseconds 500
   Shot 'collapsed'
 
+  Write-Host 'Second launch'
+  $second = Start-Process -FilePath $Exe -PassThru
+  $secondExited = $second.WaitForExit(10000)
+  Check $secondExited 'a second copy exits instead of opening another pill'
+  Check (-not $proc.HasExited) 'the first copy keeps running'
+  $open = Wait-Pill $proc { param($p) $p.W -gt 330 * $scale } 5
+  Check ($open.W -gt 330 * $scale) 'launching again opens the running pill'
+  Start-Sleep -Milliseconds 700
+  Click 40 ([int]($screen.Height - 120))
+  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale } 4
+  if (-not $second.HasExited) { Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue }
+
   Write-Host 'Quit'
   Click ([int](($small.L + $small.R) / 2)) ([int](($small.T + $small.B) / 2))
   [void](Wait-Pill $proc { param($p) $p.W -gt 330 * $scale } 5)

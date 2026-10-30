@@ -51,6 +51,10 @@ In GitHub go to **Actions → Release → Run workflow** and choose **patch**, *
 
 See [docs/ROADMAP.md](docs/ROADMAP.md#known-limitations). In short: the visual and native-window behavior was written without being run on Windows yet and needs the manual checklist; edges are clipped with a window region (not anti-aliased); only the primary display is used.
 
+## Shortcuts and single instance
+
+Settings → Shortcuts adds or removes a **desktop shortcut**. Windows does not let apps pin themselves to the **taskbar**, so the section links to the Start menu entry (created at every launch) where you can right-click Nyvora and choose Pin to taskbar. Only one copy runs at a time: starting Nyvora again (a shortcut, launch at sign-in, a manual start) opens the running pill instead of creating a second one.
+
 ## AI agents (MCP server)
 
 Nyvora ships `nyvora-mcp.exe` next to `Nyvora.exe`: a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so any MCP-capable AI app (Claude Desktop, Cursor, VS Code, Claude Code...) can work with your tasks. Settings → "AI agents (MCP)" shows a ready-to-paste config with the right path and a Copy button.

@@ -48,6 +48,14 @@
                 </StackPanel>
 
                 <StackPanel Spacing="6">
+                    <TextBlock Text="Shortcuts" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
+                    <ui:HandButton x:Name="DesktopShortcutButton" Click="OnDesktopShortcut" HorizontalAlignment="Left" />
+                    <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                               Text="Taskbar: Windows does not let an app pin itself. Open the Start menu entry below, right-click Nyvora and choose Pin to taskbar (on Windows 11: Show more options first)." />
+                    <ui:HandButton Content="Show Start menu entry" Click="OnRevealStartMenu" HorizontalAlignment="Left" Padding="10,3" FontSize="12" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
                     <TextBlock Text="AI agents (MCP)" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
                     <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
                                Text="Let an AI app (Claude Desktop, Cursor, VS Code...) read your tasks. It runs on this PC only. Paste this into the app's MCP settings; add --allow-write to the args to let it change tasks." />
