@@ -127,6 +127,8 @@ public sealed partial class TasksPanel : UserControl
         }
     }
 
+    private void OnSearchClose(object sender, RoutedEventArgs e) => CloseSearch();
+
     private void OnSearchAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
