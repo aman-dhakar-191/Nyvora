@@ -136,24 +136,41 @@ public sealed class NyvoraTools
     private List<Tool> Build() => new()
     {
         new Tool("list_tasks",
-            "List the user's tasks, most relevant first (in progress before to do, then soonest reminder). Each task has an id to use with the other tools.",
+            "List the user's tasks, most relevant first (in progress before to do, then higher priority, then soonest reminder). Each task has an id to use with the other tools.",
             ToolAccess.Read,
             Schema(
                 ("filter", Str("open (default), done, due (reminder has passed), today (reminder is today), or all")),
                 ("tag", Str("Only tasks with this tag name")),
                 ("status", Str("Only tasks in this status name, e.g. 'In progress'")),
+                ("priority", Str("Only tasks with this priority: high, medium, low or none")),
                 ("limit", Int("Maximum tasks to return (default 50, max 200)"))),
             ListTasks),
         new Tool("list_statuses", "List the status names tasks can have (set in Nyvora's settings).", ToolAccess.Read, Schema(),
             (_, s, _) => Json(new JsonObject { ["statuses"] = new JsonArray(s.Tasks.Statuses.Items.Select(x => (JsonNode)new JsonObject { ["name"] = x.Name, ["done"] = x.IsDone }).ToArray()) })),
         new Tool("list_tags", "List the tag names that exist (created in Nyvora's settings).", ToolAccess.Read, Schema(),
             (_, s, _) => Json(new JsonObject { ["tags"] = new JsonArray(s.Tasks.Tags.Items.Select(x => (JsonNode)JsonValue.Create(x.Name)!).ToArray()) })),
-        new Tool("add_task", "Add a task. Optionally give a reminder time.", ToolAccess.Write,
-            Schema(("title", Str("Task title, up to 200 characters")), ("remindAt", Str("Optional reminder as ISO 8601, e.g. 2026-10-30T09:00:00+05:30; local time if no offset"))).Require("title"),
+        new Tool("add_task", "Add a task. Optionally give a reminder time and a priority.", ToolAccess.Write,
+            Schema(("title", Str("Task title, up to 200 characters")),
+                ("remindAt", Str("Optional reminder as ISO 8601, e.g. 2026-10-30T09:00:00+05:30; local time if no offset")),
+                ("priority", Str("Optional: high, medium, low or none (default none)"))).Require("title"),
             (a, s, now) =>
             {
+                var priority = OptionalPriority(a);
                 var item = s.Tasks.Add(RequireStr(a, "title"), now, OptionalTime(a, "remindAt"));
+                if (item is not null && priority is { } p)
+                {
+                    s.Tasks.SetPriority(item.Id, p);
+                }
+
                 return Describe(item ?? throw new ToolError("The title is empty."), s, now);
+            }),
+        new Tool("set_priority", "Set a task's priority: high, medium, low or none.", ToolAccess.Write,
+            Schema(("id", Str("Task id")), ("priority", Str("high, medium, low or none"))).Require("id", "priority"),
+            (a, s, now) =>
+            {
+                var item = Find(a, s);
+                s.Tasks.SetPriority(item.Id, OptionalPriority(a) ?? throw new ToolError("'priority' is required: high, medium, low or none."));
+                return Describe(item, s, now);
             }),
         new Tool("complete_task", "Mark a task done.", ToolAccess.Write, Schema(("id", Str("Task id"))).Require("id"),
             (a, s, now) =>
@@ -238,6 +255,7 @@ public sealed class NyvoraTools
         var filter = (OptionalStr(a, "filter") ?? "open").ToLowerInvariant();
         var tag = OptionalStr(a, "tag");
         var status = OptionalStr(a, "status");
+        var priority = OptionalPriority(a);
         var limit = a["limit"] is JsonNode n && n.GetValueKind() == System.Text.Json.JsonValueKind.Number ? Math.Clamp((int)n, 1, 200) : 50;
 
         IEnumerable<TaskItem> q = s.Tasks.Ordered();
@@ -261,6 +279,11 @@ public sealed class NyvoraTools
             q = q.Where(t => string.Equals(s.Tasks.StatusOf(t).Name, status, StringComparison.OrdinalIgnoreCase));
         }
 
+        if (priority is { } want)
+        {
+            q = q.Where(t => t.Priority == want);
+        }
+
         var all = q.ToList();
         return Json(new JsonObject
         {
@@ -278,6 +301,7 @@ public sealed class NyvoraTools
         ["id"] = t.Id.ToString(),
         ["title"] = t.Title,
         ["status"] = s.Tasks.StatusOf(t).Name,
+        ["priority"] = TaskPriorities.Name(t.Priority),
         ["done"] = t.Done,
         ["tags"] = new JsonArray(s.Tasks.TagsOf(t).Select(x => (JsonNode)JsonValue.Create(x.Name)!).ToArray()),
         ["remindAt"] = t.RemindAt?.ToString("o", CultureInfo.InvariantCulture),
@@ -296,6 +320,17 @@ public sealed class NyvoraTools
         }
 
         return s.Tasks.Items.FirstOrDefault(i => i.Id == id) ?? throw new ToolError($"No task with id {raw}.");
+    }
+
+    private static TaskPriority? OptionalPriority(JsonObject a)
+    {
+        var raw = OptionalStr(a, "priority");
+        if (raw is null)
+        {
+            return null;
+        }
+
+        return TaskPriorities.TryParse(raw, out var p) ? p : throw new ToolError($"'{raw}' is not a priority. Use high, medium, low or none.");
     }
 
     private static string? OptionalStr(JsonObject a, string key) =>

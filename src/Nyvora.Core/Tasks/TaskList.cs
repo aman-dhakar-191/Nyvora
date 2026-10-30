@@ -32,7 +32,27 @@ public sealed class TaskList
 
     /// <summary>True when the task matches the search text (see <see cref="TaskSearch"/>).</summary>
     public bool Matches(TaskItem item, string? query) =>
-        TaskSearch.Matches(query, item.Title, StatusOf(item).Name, TagsOf(item).Select(t => t.Name));
+        TaskSearch.Matches(query, item.Title, StatusOf(item).Name, TagsOf(item).Select(t => t.Name), TaskPriorities.Name(item.Priority));
+
+    public bool SetPriority(Guid id, TaskPriority priority)
+    {
+        var item = Find(id);
+        if (item is null || item.Priority == priority || !Enum.IsDefined(priority))
+        {
+            return false;
+        }
+
+        item.Priority = priority;
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>One click on the priority button: none, high, medium, low, none...</summary>
+    public bool CyclePriority(Guid id)
+    {
+        var item = Find(id);
+        return item is not null && SetPriority(id, TaskPriorities.Next(item.Priority));
+    }
 
     public StatusSet Statuses => _statuses;
 
@@ -84,6 +104,12 @@ public sealed class TaskList
             {
                 item.StatusId = s.Id;
                 item.Done = s.IsDone;
+                changed = true;
+            }
+
+            if (!Enum.IsDefined(item.Priority))
+            {
+                item.Priority = TaskPriority.None; // an out-of-range number in a hand-edited file
                 changed = true;
             }
 
@@ -263,6 +289,7 @@ public sealed class TaskList
         _items
             .OrderBy(i => i.Done)
             .ThenByDescending(i => i.Done ? 0 : _statuses.IndexOf(StatusOf(i).Id)) // furthest along (e.g. In progress) first
+            .ThenByDescending(i => i.Done ? 0 : (int)i.Priority) // then the more important
             .ThenBy(i => i.RemindAt ?? DateTimeOffset.MaxValue)
             .ThenBy(i => i.Created)
             .ToList();

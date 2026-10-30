@@ -68,7 +68,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="SearchBox" PlaceholderText="Search tasks, #tags, status…" MaxLength="100" MinHeight="34"
+                <TextBox x:Name="SearchBox" PlaceholderText="Search tasks, #tags, !priority…" MaxLength="100" MinHeight="34"
                          VerticalContentAlignment="Center" Padding="12,6,12,0" TextChanged="OnSearchChanged" KeyDown="OnSearchKeyDown" />
                 <ui:HandButton Grid.Column="1" Click="OnSearchClose" Padding="8" BorderThickness="0" Background="Transparent"
                                ToolTipService.ToolTip="Close search (Esc)">

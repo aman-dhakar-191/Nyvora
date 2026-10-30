@@ -1,6 +1,7 @@
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Nyvora.App.Services;
@@ -16,6 +17,13 @@ public sealed partial class TasksPanel : UserControl
     private static readonly Brush TextBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xE7, 0xE7, 0xEE));
     private static readonly Brush MutedBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x9A, 0x9A, 0xB0));
     private static readonly Brush TodayBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD4));
+    private static Color PriorityColor(TaskPriority p) => p switch
+    {
+        TaskPriority.High => Color.FromArgb(0xFF, 0xF8, 0x71, 0x71),
+        TaskPriority.Medium => Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24),
+        _ => Color.FromArgb(0xFF, 0x60, 0xA5, 0xFA),
+    };
+
     private static readonly Brush DueBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0xBF, 0x24));
 
     private TaskList _tasks = new();
@@ -367,6 +375,14 @@ public sealed partial class TasksPanel : UserControl
             TextDecorations = item.Done ? TextDecorations.Strikethrough : TextDecorations.None,
             IsTextSelectionEnabled = true, // drag to select, Ctrl+C to copy
         };
+        if (item.Priority != TaskPriority.None && !item.Done)
+        {
+            // A colored dot in front of the title carries the priority at a glance.
+            title.Text = "";
+            title.Inlines.Add(new Run { Text = "\u25CF ", Foreground = new SolidColorBrush(PriorityColor(item.Priority)) });
+            title.Inlines.Add(new Run { Text = item.Title });
+        }
+
         ToolTipService.SetToolTip(title, "Double-click to edit");
         title.DoubleTapped += (_, e) =>
         {
@@ -525,6 +541,24 @@ public sealed partial class TasksPanel : UserControl
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         if (!item.Done)
         {
+            // One click steps through none, high, medium, low. The flag is colored once a priority is set.
+            var prio = new HandButton
+            {
+                Content = new FontIcon
+                {
+                    Glyph = "\uE7C1",
+                    FontSize = 12,
+                    Foreground = item.Priority == TaskPriority.None ? MutedBrush : new SolidColorBrush(PriorityColor(item.Priority)),
+                },
+                Padding = new Thickness(6),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+            };
+            ToolTipService.SetToolTip(prio, $"Priority: {TaskPriorities.Name(item.Priority)}. Click for {TaskPriorities.Name(TaskPriorities.Next(item.Priority))}");
+            prio.Click += (_, _) => _tasks.CyclePriority(item.Id);
+            actions.Children.Add(prio);
+            reveal.Add(prio);
+
             actions.Children.Add(edit);
             reveal.Add(edit);
         }

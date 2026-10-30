@@ -185,6 +185,38 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void PriorityCanBeSetFilteredAndShowsInResults()
+    {
+        var s = Server(write: true);
+        var low = (string)Payload(ToolCall(s, "add_task", new { title = "low one", priority = "low" }))["id"]!;
+        var plain = Payload(ToolCall(s, "add_task", new { title = "plain" }));
+        var high = Payload(ToolCall(s, "add_task", new { title = "high one" }));
+        Assert.Equal("None", (string)plain["priority"]!);
+
+        var set = Payload(ToolCall(s, "set_priority", new { id = (string)high["id"]!, priority = "HIGH" }));
+        Assert.Equal("High", (string)set["priority"]!);
+
+        var listed = Payload(ToolCall(s, "list_tasks"));
+        Assert.Equal("high one", (string)listed["tasks"]![0]!["title"]!); // most important first
+        Assert.Equal("low", ((string)Payload(ToolCall(s, "list_tasks", new { priority = "low" }))["tasks"]![0]!["title"]!).Split(' ')[0]);
+        Assert.Equal(1, (int)Payload(ToolCall(s, "list_tasks", new { priority = "high" }))["total"]!);
+
+        var saved = new JsonTaskStore(Path.Combine(_dir, "tasks.json")).Load();
+        Assert.Equal(TaskPriority.Low, saved.First(x => x.Id.ToString() == low).Priority);
+    }
+
+    [Fact]
+    public void BadPriorityIsAToolError()
+    {
+        var s = Server(write: true);
+        var id = (string)Payload(ToolCall(s, "add_task", new { title = "t" }))["id"]!;
+        Assert.True(IsError(ToolCall(s, "add_task", new { title = "x", priority = "urgent" })));
+        Assert.True(IsError(ToolCall(s, "set_priority", new { id, priority = "urgent" })));
+        Assert.True(IsError(ToolCall(s, "set_priority", new { id })));
+        Assert.DoesNotContain("set_priority", ToolNames(Server()));
+    }
+
+    [Fact]
     public void BadArgumentsAreToolErrorsNotCrashes()
     {
         var s = Server(write: true);

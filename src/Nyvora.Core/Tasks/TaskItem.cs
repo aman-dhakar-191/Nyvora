@@ -15,6 +15,9 @@ public sealed class TaskItem
     /// <summary>Ids of the <see cref="TagDef"/>s on this task. Empty for files written before tags existed.</summary>
     public List<string> TagIds { get; set; } = new();
 
+    /// <summary>None for files written before priorities existed.</summary>
+    public TaskPriority Priority { get; set; }
+
     public DateTimeOffset Created { get; set; }
 
     public DateTimeOffset? RemindAt { get; set; }

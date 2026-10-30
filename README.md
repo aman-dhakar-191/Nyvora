@@ -51,6 +51,12 @@ In GitHub go to **Actions → Release → Run workflow** and choose **patch**, *
 
 See [docs/ROADMAP.md](docs/ROADMAP.md#known-limitations). In short: the visual and native-window behavior was written without being run on Windows yet and needs the manual checklist; edges are clipped with a window region (not anti-aliased); only the primary display is used.
 
+## Priority and search
+
+- **Priority:** each open task has a flag button (visible on hover). One click steps through none, high, medium, low. A colored dot in front of the title shows it (red, amber, blue). Within the same status, higher priority is listed first; an In progress task still sits above a To do task of any priority.
+- **Search:** the magnifier in the header, or Ctrl+F. Every word must match the title, status or a tag. `#work` matches tag names only, `!high` matches the priority only. Esc clears the text, a second Esc closes the search.
+- **For AI agents:** `add_task` takes an optional `priority`, `set_priority` changes it, `list_tasks` can filter by it and every task shows its priority.
+
 ## Installing
 
 Download `Nyvora-Setup-vX.Y.Z-x64.exe` from the latest release and run it. It installs **for your user only, with no admin rights**, into `%LOCALAPPDATA%\Programs\Nyvora`, adds a Start menu entry (and, if you tick it, a desktop shortcut), and offers to start Nyvora. Uninstall from Windows Settings → Apps, or run `unins000.exe` in the install folder. The installer is **not code-signed**, so Windows SmartScreen may show "unknown publisher": choose More info → Run anyway. The zip is still published for portable use, and it is what the in-app updater downloads; self-updates replace files in the install folder in place.
