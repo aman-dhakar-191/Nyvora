@@ -40,11 +40,35 @@ public sealed partial class SettingsView : UserControl
         RefreshUpdate();
     }
 
-    private static string McpConfigText()
+    private string McpConfigText()
     {
         var dir = Path.GetDirectoryName(Environment.ProcessPath) ?? "";
         var exe = Path.Combine(dir, "nyvora-mcp.exe").Replace("\\", "\\\\");
-        return "{\n  \"mcpServers\": {\n    \"nyvora\": {\n      \"command\": \"" + exe + "\",\n      \"args\": []\n    }\n  }\n}";
+        var args = new List<string>();
+        if (McpWrite.IsChecked == true)
+        {
+            args.Add("\"--allow-write\"");
+        }
+
+        if (McpDelete.IsChecked == true)
+        {
+            args.Add("\"--allow-delete\"");
+        }
+
+        return "{\n  \"mcpServers\": {\n    \"nyvora\": {\n      \"command\": \"" + exe + "\",\n      \"args\": [" + string.Join(", ", args) + "]\n    }\n  }\n}";
+    }
+
+    private void OnMcpOptionClick(object sender, RoutedEventArgs e)
+    {
+        // Deleting only makes sense (and only works) together with write access.
+        McpDelete.IsEnabled = McpWrite.IsChecked == true;
+        if (McpWrite.IsChecked != true)
+        {
+            McpDelete.IsChecked = false;
+        }
+
+        McpConfig.Text = McpConfigText();
+        McpCopy.Content = "Copy config";
     }
 
     private void OnCopyMcp(object sender, RoutedEventArgs e)

@@ -59,7 +59,9 @@
                 <StackPanel Spacing="6">
                     <TextBlock Text="AI agents (MCP)" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
                     <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
-                               Text="Let an AI app (Claude Desktop, Cursor, VS Code...) read your tasks. It runs on this PC only. Paste this into the app's MCP settings; add --allow-write to the args to let it change tasks." />
+                               Text="Let an AI app (Claude Desktop, Cursor, VS Code...) work with your tasks. It runs on this PC only. Choose what it may do, copy the config, and paste it into the app's MCP settings." />
+                    <ui:HandCheckBox x:Name="McpWrite" Content="Allow it to add and change tasks" MinWidth="0" Click="OnMcpOptionClick" />
+                    <ui:HandCheckBox x:Name="McpDelete" Content="Also allow it to delete tasks" MinWidth="0" Click="OnMcpOptionClick" IsEnabled="False" />
                     <TextBox x:Name="McpConfig" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas"
                              FontSize="11" MinHeight="120" />
                     <ui:HandButton x:Name="McpCopy" Content="Copy config" Click="OnCopyMcp" HorizontalAlignment="Left" />
