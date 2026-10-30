@@ -151,6 +151,8 @@ public sealed partial class TasksPanel : UserControl
         }
 
         SearchBar.Visibility = Visibility.Visible;
+        InputRow.Visibility = Visibility.Collapsed; // adding while searching is confusing: the new task may not match
+        ReminderPicker.Visibility = Visibility.Collapsed;
         SearchBox.Focus(FocusState.Programmatic);
         SearchBox.SelectAll();
     }
@@ -158,6 +160,7 @@ public sealed partial class TasksPanel : UserControl
     private void CloseSearch()
     {
         SearchBar.Visibility = Visibility.Collapsed;
+        InputRow.Visibility = Visibility.Visible;
         if (SearchBox.Text.Length > 0)
         {
             SearchBox.Text = ""; // TextChanged clears the filter and redraws

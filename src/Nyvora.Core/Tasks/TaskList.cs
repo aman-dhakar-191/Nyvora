@@ -237,6 +237,26 @@ public sealed class TaskList
         return true;
     }
 
+    /// <summary>Puts a removed task back (undo); false when that task is already in the list.</summary>
+    public bool Restore(TaskItem item, int index)
+    {
+        if (Find(item.Id) is not null)
+        {
+            return false;
+        }
+
+        _items.Insert(Math.Clamp(index, 0, _items.Count), item);
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Where a task sits in the list, so an undo can put it back in the same place; -1 if absent.</summary>
+    public int IndexOf(Guid id)
+    {
+        var item = Find(id);
+        return item is null ? -1 : _items.IndexOf(item);
+    }
+
     /// <summary>Sets, moves or (with null) clears a task's reminder; a changed reminder fires again.</summary>
     public bool SetReminder(Guid id, DateTimeOffset? at)
     {

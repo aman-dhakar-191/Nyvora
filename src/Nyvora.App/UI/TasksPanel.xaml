@@ -48,7 +48,7 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" ColumnSpacing="8">
+        <Grid x:Name="InputRow" Grid.Row="1" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
