@@ -146,14 +146,14 @@ try {
 
   Write-Host 'Esc and click away'
   [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale } 4
+  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale -and $p.H -le 48 * $scale } 4   # settled: the click below must land on the finished pill, not on a collapsing window
   Check ($small.W -lt 260 * $scale) 'Esc collapses the pill' ("{0}" -f $small.W)
   Click ([int](($small.L + $small.R) / 2)) ([int](($small.T + $small.B) / 2))
   $open = Wait-Pill $proc { param($p) $p.W -gt 330 * $scale } 5
   Check ($open.W -gt 330 * $scale) 'it expands again'
   Start-Sleep -Milliseconds 700
   Click 40 ([int]($screen.Height - 120))
-  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale } 4
+  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale -and $p.H -le 48 * $scale } 4   # settled: the click below must land on the finished pill, not on a collapsing window
   Check ($small.W -lt 260 * $scale) 'clicking elsewhere collapses the pill' ("{0}" -f $small.W)
   Start-Sleep -Milliseconds 500
   Shot 'collapsed'
@@ -167,7 +167,7 @@ try {
   Check ($open.W -gt 330 * $scale) 'launching again opens the running pill'
   Start-Sleep -Milliseconds 700
   Click 40 ([int]($screen.Height - 120))
-  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale } 4
+  $small = Wait-Pill $proc { param($p) $p.W -lt 260 * $scale -and $p.H -le 48 * $scale } 4   # settled: the click below must land on the finished pill, not on a collapsing window
   if (-not $second.HasExited) { Stop-Process -Id $second.Id -Force -ErrorAction SilentlyContinue }
 
   Write-Host 'Quit'
