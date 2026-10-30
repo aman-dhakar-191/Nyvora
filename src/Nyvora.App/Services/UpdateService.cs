@@ -125,8 +125,10 @@ internal sealed class UpdateService
         var root = Path.Combine(UpdatesDir, update.Tag);
         var zip = Path.Combine(root, "package.zip");
         var stage = Path.Combine(root, "stage");
+        var step = "starting";
         try
         {
+            step = "preparing";
             Set(UpdateState.Downloading, "Downloading…");
             if (Directory.Exists(root))
             {
@@ -136,10 +138,16 @@ internal sealed class UpdateService
             Directory.CreateDirectory(root);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+            step = "downloading the checksum";
+            Log.Info($"Update {update.Tag}: {step} from {update.ChecksumUrl}");
             var expected = Checksum.ParseExpected(await Http.GetStringAsync(update.ChecksumUrl, cts.Token))
                 ?? throw new InvalidDataException("Checksum file is malformed.");
+            step = "downloading the package";
+            Log.Info($"Update {update.Tag}: {step} from {update.PackageUrl}");
             await DownloadAsync(update.PackageUrl, zip, cts.Token);
 
+            step = "verifying the download";
+            Log.Info($"Update {update.Tag}: downloaded {new FileInfo(zip).Length} bytes; {step}");
             Set(UpdateState.Installing, "Verifying…");
             await using (var fs = File.OpenRead(zip))
             {
@@ -150,24 +158,40 @@ internal sealed class UpdateService
                 }
             }
 
+            step = "unpacking";
+            Log.Info($"Update {update.Tag}: {step}");
             await Task.Run(() => ZipFile.ExtractToDirectory(zip, stage), cts.Token);
             if (!File.Exists(Path.Combine(stage, "Nyvora.exe")))
             {
                 throw new InvalidDataException("Package does not contain Nyvora.exe.");
             }
 
+            step = "starting the installer";
             Set(UpdateState.Installing, "Restarting…");
             Launch(stage, update);
             Log.Info($"Installing {update.Tag}; exiting for restart");
             RestartRequested?.Invoke();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException
-                                       or InvalidDataException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
+        catch (Exception ex)
         {
-            Log.Error("Update install failed", ex);
+            // Any failure, expected or not, must leave the app running and say what went wrong.
+            Log.Error($"Update install failed while {step}", ex);
             TryDelete(root);
-            Set(UpdateState.Available, "Update failed. Try again");
+            Set(UpdateState.Available, $"Update failed while {step}: {Explain(ex)}");
         }
+    }
+
+    /// <summary>One short line for the Settings panel; the full exception is in the log.</summary>
+    private static string Explain(Exception ex)
+    {
+        var inner = ex;
+        while (inner.InnerException is not null)
+        {
+            inner = inner.InnerException;
+        }
+
+        var text = $"{inner.GetType().Name}: {inner.Message}".Replace('\r', ' ').Replace('\n', ' ');
+        return text.Length > 140 ? text[..140] + "…" : text;
     }
 
     private static string LoadHelperScript()

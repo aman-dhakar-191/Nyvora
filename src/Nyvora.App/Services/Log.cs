@@ -6,6 +6,8 @@ namespace Nyvora.App.Services;
 internal static class Log
 {
     private static readonly object Gate = new();
+    public static string FilePath => Path;
+
     private static readonly string Path = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "nyvora.log");
 

@@ -38,11 +38,13 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock x:Name="UpdateText" FontSize="13" Foreground="#FFE7E7EE" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" />
+                                   TextWrapping="Wrap" />
                         <ui:HandButton x:Name="UpdateButton" Grid.Column="1" Click="OnUpdateClick" />
                     </Grid>
                     <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
                                Text="Checks GitHub Releases once a day. Installing is always your click." />
+                    <ui:HandButton Content="Open log folder" Click="OnOpenLogs" HorizontalAlignment="Left" Padding="10,3" FontSize="12"
+                                   ToolTipService.ToolTip="Shows nyvora.log (what the app did) and updates\update.log (the installer)" />
                 </StackPanel>
 
                 <StackPanel Spacing="6">

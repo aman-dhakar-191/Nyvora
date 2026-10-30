@@ -52,6 +52,22 @@ public sealed partial class SettingsView : UserControl
         McpCopy.Content = ok ? "Copied" : "Could not copy; select the text instead";
     }
 
+    private void OnOpenLogs(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var file = Log.FilePath;
+            var psi = File.Exists(file)
+                ? new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{file}\"")
+                : new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{Path.GetDirectoryName(file)}\"");
+            System.Diagnostics.Process.Start(psi)?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Could not open the log folder", ex);
+        }
+    }
+
     private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
