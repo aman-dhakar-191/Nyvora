@@ -1,12 +1,12 @@
 using Nyvora.Core.Settings;
+using Nyvora.Core.Storage;
 
 namespace Nyvora.App.Services;
 
 /// <summary>Single shared <see cref="AppSettings"/> instance so independent features cannot overwrite each other's fields.</summary>
 internal sealed class SettingsStore
 {
-    private static readonly string FilePath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "settings.json");
+    private static readonly string FilePath = System.IO.Path.Combine(DataFolders.Roaming, "settings.json");
 
     public AppSettings Current { get; } = AppSettings.Load(FilePath);
 

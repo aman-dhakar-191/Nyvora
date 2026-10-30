@@ -72,6 +72,19 @@ jobs:
       - name: Publish MCP server (into the app folder)
         run: dotnet publish src/Nyvora.Mcp/Nyvora.Mcp.csproj -c Release -r win-x64 --self-contained true -o artifacts/Nyvora-win-x64 -p:Version=${{ env.VERSION }}
 
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y | Out-Host
+          $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' }
+          & $iscc "/DAppVersion=%s" "/DSourceDir=$PWD\artifacts\Nyvora-win-x64" "/O$PWD\artifacts\installer" installer\Nyvora.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+
+      - name: Test the installer (silent install, MCP from the install, silent uninstall)
+        shell: pwsh
+        run: ./tests/installer/Test-Installer.ps1 -Setup (Get-ChildItem artifacts/installer/*.exe | Select-Object -First 1).FullName
+
       - name: Zip and checksum
         shell: pwsh
         run: |
@@ -80,11 +93,17 @@ jobs:
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $zip" | Out-File "$zip.sha256" -Encoding ascii
 
+          $setup = Get-ChildItem artifacts/installer/*.exe | Select-Object -First 1
+          Copy-Item $setup.FullName .
+          $setupHash = (Get-FileHash $setup.Name -Algorithm SHA256).Hash.ToLower()
+          "$setupHash  $($setup.Name)" | Out-File "$($setup.Name).sha256" -Encoding ascii
+
       - name: Create GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $zip = "Nyvora-$env:TAG-win-x64.zip"
+          $setup = (Get-ChildItem Nyvora-Setup-*.exe | Select-Object -First 1).Name
           # --target creates the tag at this commit when it does not exist yet (the manual-run case).
-          gh release create "$env:TAG" $zip "$zip.sha256" --title "Nyvora $env:TAG" --generate-notes --prerelease --target "$env:GITHUB_SHA"
+          gh release create "$env:TAG" $zip "$zip.sha256" $setup "$setup.sha256" --title "Nyvora $env:TAG" --generate-notes --prerelease --target "$env:GITHUB_SHA"

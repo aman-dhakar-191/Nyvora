@@ -1,6 +1,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Nyvora.App.Services;
+using Nyvora.Core.Storage;
 
 namespace Nyvora.App;
 
@@ -41,6 +42,13 @@ public partial class App : Application
 
             Exit();
             return;
+        }
+
+        // Before anything reads tasks.json or settings.json: older versions kept them in Local.
+        var moved = DataFolders.MigrateFromLocal();
+        if (moved.Count > 0)
+        {
+            Log.Info($"Copied {string.Join(", ", moved)} from {DataFolders.Local} to {DataFolders.Roaming}");
         }
 
         _window = new MainWindow();

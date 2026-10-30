@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Nyvora.App.Services;
 using Nyvora.App.Windowing;
 using Nyvora.Core.Animation;
+using Nyvora.Core.Storage;
 using Nyvora.Core.State;
 using Nyvora.Core.Tasks;
 using Windows.UI;
@@ -24,8 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _reminderTimer;
     private readonly Stopwatch _clock = new();
     private readonly Stopwatch _sideClock = new();
-    private static readonly string TasksPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora", "tasks.json");
+    private static readonly string TasksPath = Path.Combine(DataFolders.Roaming, "tasks.json");
 
     private readonly JsonTaskStore _store = new(TasksPath);
     private FileSystemWatcher? _watcher;

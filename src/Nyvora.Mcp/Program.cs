@@ -25,7 +25,7 @@ for (var i = 0; i < args.Length; i++)
                 "nyvora-mcp: MCP server (stdio) for the Nyvora task manager.\n" +
                 "  --allow-write    let agents add, edit, complete and tag tasks (default: read-only)\n" +
                 "  --allow-delete   also let agents delete tasks (implies --allow-write)\n" +
-                "  --data-dir PATH  use another data folder (default: %LOCALAPPDATA%\\Nyvora)");
+                "  --data-dir PATH  use another data folder (default: %APPDATA%\\Nyvora)");
             return 0;
         default:
             Console.Error.WriteLine($"Unknown argument: {args[i]} (try --help)");
@@ -33,7 +33,11 @@ for (var i = 0; i < args.Length; i++)
     }
 }
 
-dataDir ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Nyvora");
+if (dataDir is null)
+{
+    dataDir = Nyvora.Core.Storage.DataFolders.Roaming;
+    Nyvora.Core.Storage.DataFolders.MigrateFromLocal(); // the app may not have run since the data moved
+}
 var version = (Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0").Split('+')[0];
 
 var tools = new NyvoraTools(dataDir, allowWrite, allowDelete);

@@ -23,7 +23,7 @@ dotnet run --project src/Nyvora.App -c Release -p:Platform=x64
 
 ## Using it
 
-- Click the pill to expand. It opens a task list: type a task and press Enter. To give the next task a reminder, click the ⏰ button next to the input first (10 min, 1 hour, tomorrow 9:00, or a time); the button shows what is set and resets after the task is added. Due tasks turn the resting pill amber ("N due"); the pill also pops open, without taking focus, when a reminder fires. Snooze adds 10 minutes. Tasks are stored locally in `%LOCALAPPDATA%\Nyvora\tasks.json`; reminders only fire while Nyvora is running (missed ones fire at next start).
+- Click the pill to expand. It opens a task list: type a task and press Enter. To give the next task a reminder, click the ⏰ button next to the input first (10 min, 1 hour, tomorrow 9:00, or a time); the button shows what is set and resets after the task is added. Due tasks turn the resting pill amber ("N due"); the pill also pops open, without taking focus, when a reminder fires. Snooze adds 10 minutes. Tasks are stored locally in `%APPDATA%\Nyvora\tasks.json`; reminders only fire while Nyvora is running (missed ones fire at next start).
 - **Settings** (gear icon in the panel header) open as a panel that slides out to the right of the pill, so your tasks stay visible; close it with its ✕ or the gear. It has **Always on top** (default on), the hourly status reminder, **Check for updates** / **Install and restart**, and the task-status editor. All saved in `settings.json`.
 - **Always on top:** when on (default) Turn it off and the pill behaves like a normal window and can sit behind others; expanding it brings it forward. Exclusive-fullscreen apps and games cover the pill either way.
 - **Reminders on existing tasks:** every open task has a button showing its reminder ("⏰ 17:00", "Due 14:30") or "⏰ Add". Click it to set, change or clear the reminder: 10 min, 1 hour, tomorrow 9:00, or a time such as `14:30` or `2:30 pm` (next occurrence, so a time already past today means tomorrow).
@@ -35,7 +35,7 @@ dotnet run --project src/Nyvora.App -c Release -p:Platform=x64
 - **Resting pill:** shows `N due · M open` (amber dot while reminders are due), `M open`, or just `Nyvora` when there is nothing open.
 - Collapse with **Esc**, **Collapse**, or by clicking elsewhere.
 - Right-click the pill (or use **Quit**) to exit. There is no taskbar entry by design.
-- Updates: Settings shows the version and a **Check for updates** button, and the panel footer shows "Update vX.Y.Z available" when one is waiting. Nyvora also checks GitHub Releases once a day, a few seconds after launch (set `"AutoCheckUpdates": false` in `%LOCALAPPDATA%\Nyvora\settings.json` to disable all automatic network requests). Installing is always your click: it downloads the release zip, verifies its SHA-256 from the release's `.sha256` file, then restarts into the new version. It is disabled when running from a build folder.
+- Updates: Settings shows the version and a **Check for updates** button, and the panel footer shows "Update vX.Y.Z available" when one is waiting. Nyvora also checks GitHub Releases once a day, a few seconds after launch (set `"AutoCheckUpdates": false` in `%APPDATA%\Nyvora\settings.json` to disable all automatic network requests). Installing is always your click: it downloads the release zip, verifies its SHA-256 from the release's `.sha256` file, then restarts into the new version. It is disabled when running from a build folder.
 - Logs: `%LOCALAPPDATA%\Nyvora\nyvora.log` (events and exceptions only; no network, no telemetry).
 
 ## Releasing
@@ -50,6 +50,15 @@ In GitHub go to **Actions → Release → Run workflow** and choose **patch**, *
 ## Known limitations
 
 See [docs/ROADMAP.md](docs/ROADMAP.md#known-limitations). In short: the visual and native-window behavior was written without being run on Windows yet and needs the manual checklist; edges are clipped with a window region (not anti-aliased); only the primary display is used.
+
+## Installing
+
+Download `Nyvora-Setup-vX.Y.Z-x64.exe` from the latest release and run it. It installs **for your user only, with no admin rights**, into `%LOCALAPPDATA%\Programs\Nyvora`, adds a Start menu entry (and, if you tick it, a desktop shortcut), and offers to start Nyvora. Uninstall from Windows Settings → Apps, or run `unins000.exe` in the install folder. The installer is **not code-signed**, so Windows SmartScreen may show "unknown publisher": choose More info → Run anyway. The zip is still published for portable use, and it is what the in-app updater downloads; self-updates replace files in the install folder in place.
+
+**Where things live**
+- Program files: `%LOCALAPPDATA%\Programs\Nyvora` (installer) or wherever you unzipped.
+- Your data, in Roaming: `%APPDATA%\Nyvora\tasks.json` and `settings.json`. Install, update and uninstall never touch them. Versions before this one kept them in `%LOCALAPPDATA%\Nyvora`; on first start they are copied to Roaming and the old copies are left as a backup.
+- Disposable and machine-specific files, in Local: `%LOCALAPPDATA%\Nyvora\nyvora.log`, `updates\` and `rollback\`.
 
 ## Shortcuts and single instance
 
