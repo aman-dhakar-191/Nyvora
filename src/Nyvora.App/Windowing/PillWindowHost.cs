@@ -46,7 +46,9 @@ internal sealed class PillWindowHost : IDisposable
         // WS_POPUP drops caption/frame (and the minimum tracking size that comes with them);
         // WS_EX_TOOLWINDOW hides the taskbar button and Alt+Tab entry.
         var style = (long)GetWindowLongPtr(_hwnd, GWL_STYLE);
-        style = (style & ~0x00CF0000L /* caption|sysmenu|thickframe|min|max */) | WS_POPUP | WS_VISIBLE;
+        // Not WS_VISIBLE: the window stays hidden until Show() has sized it, otherwise a slow start briefly shows a
+        // default-sized blank window before the pill appears.
+        style = (style & ~0x00CF0000L /* caption|sysmenu|thickframe|min|max|visible */ & ~WS_VISIBLE) | WS_POPUP;
         SetWindowLongPtr(_hwnd, GWL_STYLE, (nint)style);
         SetNoActivate(true);
 

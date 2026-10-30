@@ -94,7 +94,8 @@ try {
   $proc = Start-Process -FilePath $Exe -PassThru
 
   Write-Host 'Launch'
-  $pill = Wait-Pill $proc { param($p) $p.W -gt 40 } 25
+  # Wait for the pill itself, not whatever window exists first: a default-sized window before it is a startup flaw.
+  $pill = Wait-Pill $proc { param($p) $p.W -gt 40 -and $p.W -lt 260 * $scale -and $p.H -lt 80 * $scale } 25
   Check (-not $proc.HasExited) 'the app is running'
   if ($null -eq $pill) { Check $false 'a window appeared'; throw 'no window' }
   Check $true 'a window appeared' ("{0}x{1} at {2},{3}" -f $pill.W, $pill.H, $pill.L, $pill.T)
