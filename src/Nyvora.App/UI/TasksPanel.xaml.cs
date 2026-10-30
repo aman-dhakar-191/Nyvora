@@ -1,5 +1,4 @@
 using Microsoft.UI;
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
@@ -158,7 +157,7 @@ public sealed partial class TasksPanel : UserControl
     }
 
     private bool _searchOpen;
-    private DispatcherQueueTimer? _swapTimer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _swapTimer;
 
     /// <summary>The add box and the search box share one row: one fades out as the other fades in, so the list never jumps.</summary>
     private void SwapInputAndSearch(bool search)
