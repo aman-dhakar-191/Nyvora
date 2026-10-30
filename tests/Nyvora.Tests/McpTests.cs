@@ -206,6 +206,47 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void NotchMessagesCanBeSetReadAndCleared()
+    {
+        var s = Server(write: true);
+        Assert.Null(Payload(ToolCall(s, "get_notch_message"))["message"]);
+
+        var set = Payload(ToolCall(s, "set_notch_message", new { text = "Deploying v2", tone = "warn", minutes = 30 }));
+        Assert.Equal("Deploying v2", (string)set["message"]!);
+        Assert.Equal("warning", (string)set["tone"]!);
+
+        var shown = NotchMessageStore.Load(Path.Combine(_dir, "notch.json"), Now);
+        Assert.Equal("Deploying v2", shown!.Text); // this is the file the app watches
+        Assert.Equal(Now.AddMinutes(30), shown.ExpiresAt);
+        Assert.Equal("Deploying v2", (string)Payload(ToolCall(s, "get_notch_message"))["message"]!);
+
+        ToolCall(s, "clear_notch_message");
+        Assert.Null(Payload(ToolCall(s, "get_notch_message"))["message"]);
+        Assert.Null(NotchMessageStore.Load(Path.Combine(_dir, "notch.json"), Now));
+    }
+
+    [Fact]
+    public void BadNotchMessagesAreToolErrors()
+    {
+        var s = Server(write: true);
+        Assert.True(IsError(ToolCall(s, "set_notch_message", new { text = "" })));
+        Assert.True(IsError(ToolCall(s, "set_notch_message", new { text = new string('x', 41) })));
+        Assert.True(IsError(ToolCall(s, "set_notch_message", new { text = "hi", tone = "purple" })));
+        Assert.True(IsError(ToolCall(s, "set_notch_message", new { text = "hi", minutes = 0 })));
+        Assert.True(IsError(ToolCall(s, "set_notch_message")));
+    }
+
+    [Fact]
+    public void ReadOnlyServersCanReadButNotChangeTheNotch()
+    {
+        var names = ToolNames(Server());
+        Assert.Contains("get_notch_message", names);
+        Assert.DoesNotContain("set_notch_message", names);
+        Assert.DoesNotContain("clear_notch_message", names);
+        Assert.True(IsError(ToolCall(Server(), "set_notch_message", new { text = "hi" })));
+    }
+
+    [Fact]
     public void BadPriorityIsAToolError()
     {
         var s = Server(write: true);

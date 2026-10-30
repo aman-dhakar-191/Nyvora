@@ -39,11 +39,12 @@
 
         <!-- Resting content: covers the whole pill, shows the hand cursor, and expands on tap. -->
         <ui:HandGrid x:Name="RestingContent" Background="Transparent" Tapped="OnRestingTapped">
-            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+            <StackPanel x:Name="RestingStack" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
                         VerticalAlignment="Center" IsHitTestVisible="False">
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#FF5EEAD4" VerticalAlignment="Center" />
+                <!-- Due and open by default; a temporary status or message ("/notch" or an agent) takes its place while it lasts. -->
                 <TextBlock x:Name="RestingLabel" Text="Nyvora" FontSize="13" FontWeight="SemiBold"
-                           Foreground="#FFE7E7EE" />
+                           Foreground="#FFE7E7EE" MaxWidth="300" TextTrimming="CharacterEllipsis" />
             </StackPanel>
         </ui:HandGrid>
 

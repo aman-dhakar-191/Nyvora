@@ -64,6 +64,13 @@ public sealed class PillAnimator
         return Math.Clamp((size.Width - RestingSize.Width) / range, 0.0, 1.0);
     }
 
+    /// <summary>Like <see cref="ExpansionProgress(SizeD, SizeD)"/>, for a resting pill that is wider than the default.</summary>
+    public static double ExpansionProgress(SizeD size, SizeD expanded, SizeD resting)
+    {
+        var range = expanded.Width - resting.Width;
+        return range <= 0 ? 1.0 : Math.Clamp((size.Width - resting.Width) / range, 0.0, 1.0);
+    }
+
     public static double EaseInOutCubic(double t) => t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
 
     public static double EaseOutCubic(double t) => 1 - Math.Pow(1 - t, 3);

@@ -30,6 +30,7 @@ public sealed class NyvoraTools
 
     private readonly string _tasksPath;
     private readonly string _settingsPath;
+    private readonly string _notchPath;
     private readonly bool _allowWrite;
     private readonly bool _allowDelete;
     private readonly Func<DateTimeOffset> _clock;
@@ -39,6 +40,7 @@ public sealed class NyvoraTools
     {
         _tasksPath = Path.Combine(dataDir, "tasks.json");
         _settingsPath = Path.Combine(dataDir, "settings.json");
+        _notchPath = Path.Combine(dataDir, NotchMessageStore.FileName);
         _allowDelete = allowDelete;
         _allowWrite = allowWrite || allowDelete;
         _clock = clock ?? (() => DateTimeOffset.Now);
@@ -149,6 +151,38 @@ public sealed class NyvoraTools
             (_, s, _) => Json(new JsonObject { ["statuses"] = new JsonArray(s.Tasks.Statuses.Items.Select(x => (JsonNode)new JsonObject { ["name"] = x.Name, ["done"] = x.IsDone }).ToArray()) })),
         new Tool("list_tags", "List the tag names that exist (created in Nyvora's settings).", ToolAccess.Read, Schema(),
             (_, s, _) => Json(new JsonObject { ["tags"] = new JsonArray(s.Tasks.Tags.Items.Select(x => (JsonNode)JsonValue.Create(x.Name)!).ToArray()) })),
+        new Tool("get_notch_message", "Read the message currently shown on Nyvora's notch (the small pill), if any.", ToolAccess.Read, Schema(),
+            (_, _, now) =>
+            {
+                var m = NotchMessageStore.Load(_notchPath, now);
+                return Json(m is null
+                    ? new JsonObject { ["message"] = null }
+                    : new JsonObject { ["message"] = m.Text, ["tone"] = m.Tone.ToString().ToLowerInvariant(), ["expiresAt"] = m.ExpiresAt?.ToString("o", CultureInfo.InvariantCulture) });
+            }),
+        new Tool("set_notch_message",
+            $"Show a short message on Nyvora's notch (up to {NotchMessage.MaxLength} characters) in place of the task counters, for example a status like 'Deploying v2'. Replaces any earlier message.",
+            ToolAccess.Write,
+            Schema(("text", Str($"The message, up to {NotchMessage.MaxLength} characters")),
+                ("tone", Str("Optional colour: info (default), success, warning or error")),
+                ("minutes", Int($"Optional: remove the message by itself after this many minutes (1 to {NotchMessage.MaxMinutes}); omit to keep it until cleared"))).Require("text"),
+            (a, _, now) =>
+            {
+                int? minutes = a["minutes"] is JsonNode n && n.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int)n : null;
+                var error = NotchMessage.TryCreate(RequireStr(a, "text"), OptionalStr(a, "tone"), minutes, now, out var message);
+                if (error is not null)
+                {
+                    throw new ToolError(error);
+                }
+
+                NotchMessageStore.Save(_notchPath, message!);
+                return Json(new JsonObject { ["message"] = message!.Text, ["tone"] = message.Tone.ToString().ToLowerInvariant(), ["expiresAt"] = message.ExpiresAt?.ToString("o", CultureInfo.InvariantCulture) });
+            }),
+        new Tool("clear_notch_message", "Remove the message from Nyvora's notch so it shows the task counters again.", ToolAccess.Write, Schema(),
+            (_, _, _) =>
+            {
+                NotchMessageStore.Clear(_notchPath);
+                return Json(new JsonObject { ["message"] = null });
+            }),
         new Tool("add_task", "Add a task. Optionally give a reminder time and a priority.", ToolAccess.Write,
             Schema(("title", Str("Task title, up to 200 characters")),
                 ("remindAt", Str("Optional reminder as ISO 8601, e.g. 2026-10-30T09:00:00+05:30; local time if no offset")),

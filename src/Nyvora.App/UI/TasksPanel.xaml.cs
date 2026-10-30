@@ -36,6 +36,9 @@ public sealed partial class TasksPanel : UserControl
         ClipboardText.Attach(SearchBox);
     }
 
+    /// <summary>The add box got "/notch text" (set the notch message) or a bare "/notch" (clear it).</summary>
+    public event Action<string>? NotchRequested;
+
     public event Action? CollapseRequested;
 
     public event Action? QuitRequested;
@@ -1264,6 +1267,14 @@ public sealed partial class TasksPanel : UserControl
 
     private void AddFromInput()
     {
+        if (NotchMessage.TryParseCommand(Input.Text, out var notch))
+        {
+            Input.Text = "";
+            NotchRequested?.Invoke(notch);
+            Input.Focus(FocusState.Programmatic);
+            return;
+        }
+
         var now = DateTimeOffset.Now;
         var remindAt = _pendingAt ?? Reminders.Resolve(_pendingPreset, now);
         if (_tasks.Add(Input.Text, now, remindAt) is not null)

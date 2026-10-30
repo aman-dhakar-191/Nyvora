@@ -10,15 +10,18 @@
 
         <StackPanel x:Name="Rows" Spacing="4" />
 
-        <Grid ColumnSpacing="8">
+        <!-- Same columns as the rows above: name, Done, then the Add button over the three icon columns. -->
+        <Grid ColumnSpacing="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="28" />
+                <ColumnDefinition Width="28" />
+                <ColumnDefinition Width="28" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="NewName" PlaceholderText="New status name" MaxLength="24" KeyDown="OnNewKeyDown" />
-            <ui:HandCheckBox x:Name="NewDone" Grid.Column="1" Content="Done" MinWidth="0" />
-            <ui:HandButton Grid.Column="2" Content="Add" Click="OnAdd" />
+            <ui:HandCheckBox x:Name="NewDone" Grid.Column="1" Content="Done" MinWidth="0" Margin="6,0,0,0" />
+            <ui:HandButton Grid.Column="2" Grid.ColumnSpan="3" Content="Add" Click="OnAdd" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
         </Grid>
 
         <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FFFB7185" MinHeight="16" TextWrapping="Wrap" />

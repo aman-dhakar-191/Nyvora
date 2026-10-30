@@ -40,9 +40,10 @@ public sealed partial class TagSettingsView : UserControl
     private UIElement BuildRow(TagDef tag)
     {
         var row = new Grid { ColumnSpacing = 6 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Same columns as the add row under the list (swatch, name, a 72 px column for the delete / Add button).
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(72) });
 
         var color = TagVisuals.Of(tag.Color);
         var swatch = new HandButton
@@ -92,9 +93,10 @@ public sealed partial class TagSettingsView : UserControl
         {
             Content = new FontIcon { Glyph = "\uE711", FontSize = 12 },
             Padding = new Thickness(7),
+            HorizontalAlignment = HorizontalAlignment.Center,
             Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
             BorderThickness = new Thickness(0),
-        };
+        }.Quiet();
         ToolTipService.SetToolTip(delete, "Delete tag (removed from all tasks)");
         delete.Click += (_, _) => Show(_tags.Remove(tag.Id));
         Grid.SetColumn(delete, 2);

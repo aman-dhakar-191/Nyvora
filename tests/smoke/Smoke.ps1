@@ -188,7 +188,7 @@ try {
   $cfg | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
   $nowUtc = (Get-Date).ToUniversalTime()
   $seed = @(
-    @{ Id = [guid]::NewGuid().ToString(); Title = 'Write the quarterly report and send it to everyone on the team'; Done = $false; Created = $nowUtc.ToString('o'); RemindAt = $nowUtc.AddHours(-2).ToString('o'); Notified = $true; Priority = 1; TagIds = @('work', 'home') },
+    @{ Id = [guid]::NewGuid().ToString(); Title = 'Write the quarterly report and send it to everyone on the team'; Done = $false; StatusId = 'doing'; Created = $nowUtc.ToString('o'); RemindAt = $nowUtc.AddHours(-2).ToString('o'); Notified = $true; Priority = 1; TagIds = @('work', 'home') },
     @{ Id = [guid]::NewGuid().ToString(); Title = 'Short one'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 0; TagIds = @() },
     @{ Id = [guid]::NewGuid().ToString(); Title = 'Call the dentist'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 2; TagIds = @('home') }
   )
@@ -197,6 +197,19 @@ try {
   $cp = Wait-Pill $compactProc { param($p) $p.W -gt 40 -and $p.W -lt 260 * $scale -and $p.H -lt 80 * $scale } 25
   if ($null -ne $cp) {
     Start-Sleep -Milliseconds 700
+    Shot 'resting-tasks'                                          # the notch with per-status counters
+    # A message written to notch.json (as an agent or "/notch" would) takes the notch's place; the running app should pick it up and widen to fit it.
+    $notchPath = Join-Path $env:APPDATA 'Nyvora\notch.json'
+    '{ "Text": "Deploying release v2 to production", "Tone": "Warning" }' | Set-Content -LiteralPath $notchPath -Encoding UTF8
+    $withMsg = Wait-Pill $compactProc { param($p) $p.W -gt $cp.W + 40 * $scale } 5
+    Start-Sleep -Milliseconds 400
+    Shot 'resting-notch'
+    Check ($withMsg.W -gt $cp.W + 40 * $scale) 'a long notch message widens the pill' ("{0} -> {1}" -f $cp.W, $withMsg.W)
+    # Clearing it (an empty message, as "/notch" or an agent writes) should take the message away and shrink the pill back.
+    '{ "Text": "", "Tone": "Info" }' | Set-Content -LiteralPath $notchPath -Encoding UTF8
+    $backSmall = Wait-Pill $compactProc { param($p) $p.W -le $cp.W + 10 * $scale } 5
+    Check ($backSmall.W -le $cp.W + 10 * $scale) 'clearing the message shrinks the pill back' ("{0}" -f $backSmall.W)
+    Remove-Item -LiteralPath $notchPath -ErrorAction SilentlyContinue
     Click ([int](($cp.L + $cp.R) / 2)) ([int](($cp.T + $cp.B) / 2))
     [void](Wait-Pill $compactProc { param($p) $p.W -gt 300 * $scale } 6)
     Start-Sleep -Milliseconds 900

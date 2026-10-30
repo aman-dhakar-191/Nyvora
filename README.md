@@ -72,6 +72,14 @@ Download `Nyvora-Setup-vX.Y.Z-x64.exe` from the latest release and run it. It in
 - Your data, in Roaming: `%APPDATA%\Nyvora\tasks.json` and `settings.json`. Install, update and uninstall never touch them. Versions before this one kept them in `%LOCALAPPDATA%\Nyvora`; on first start they are **copied** to Roaming (never moved or deleted: the old files stay as a backup, and if the copy fails Nyvora keeps using the old folder so nothing disappears). Close all running Nyvora copies before updating, because an old copy keeps writing to the old folder.
 - Disposable and machine-specific files, in Local: `%LOCALAPPDATA%\Nyvora\nyvora.log`, `updates\` and `rollback\`.
 
+## Notch messages
+
+The pill shows what is due and how many tasks are open. It can also show a **temporary status or message** that comes and goes: while the message lasts it takes the place of due and open (hover the pill to see the counts), the pill widens if the text needs the room, and when the message is cleared or expires, due and open come back.
+
+- **From the add box:** `/notch Deploying v2` shows it, `/notch warn: Server down` shows it in amber (tones: `info`, `ok`, `warn`, `error`), and a bare `/notch` clears it.
+- **From an AI agent:** the MCP server has `set_notch_message` (text up to 40 characters, optional `tone`, optional `minutes` after which it disappears by itself), `clear_notch_message` and `get_notch_message`. The two that change the notch need `--allow-write`, like the task tools.
+- It is stored in `notch.json` next to your tasks, and the running app picks changes up within a second.
+
 ## Keyboard
 
 | Keys | Does |

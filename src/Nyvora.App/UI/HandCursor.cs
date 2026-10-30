@@ -16,6 +16,18 @@ public sealed class HandButton : Button
         MinHeight = 28;
         MinWidth = 0;
         Padding = new Thickness(10, 4, 10, 4);
+        // App.xaml sets 8 px corners for every control, but the stock Button ignored it and drew square corners next to
+        // the rounded text boxes. Setting it here makes every button in the app match.
+        CornerRadius = new CornerRadius(8);
+    }
+
+    /// <summary>For icon buttons with no background of their own: a disabled one fades to its dimmed icon instead of showing a dark block.</summary>
+    public HandButton Quiet()
+    {
+        var clear = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        Resources["ButtonBackgroundDisabled"] = clear;
+        Resources["ButtonBorderBrushDisabled"] = clear;
+        return this;
     }
 }
 

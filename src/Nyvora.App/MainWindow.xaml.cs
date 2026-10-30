@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer _updateCheckTimer;
 
     private SizeD _current = PillAnimator.RestingSize;
+    private SizeD _restingSize = PillAnimator.RestingSize;
     private SizeD _expandedSize = PillAnimator.DefaultExpandedSize;
     private PillAnimator? _animator;
     private PillAnimator? _sideAnimator;
@@ -168,6 +169,8 @@ public sealed partial class MainWindow : Window
 
         var queue = DispatcherQueue.GetForCurrentThread();
         WatchTasksFile(queue);
+        WatchNotch(queue);
+        Panel.NotchRequested += OnNotchCommand;
         _awayTimer = queue.CreateTimer();
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
         _awayTimer.Tick += (_, _) =>
@@ -397,13 +400,151 @@ public sealed partial class MainWindow : Window
         ExpandPassively();
     }
 
+    private static Brush ToneBrush(NotchTone tone) => tone switch
+    {
+        NotchTone.Success => new SolidColorBrush(Color.FromArgb(0xFF, 0x4A, 0xDE, 0x80)),
+        NotchTone.Warning => DueBrush,
+        NotchTone.Error => new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)),
+        _ => AccentBrush,
+    };
+
+    private static readonly Brush LabelBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xE7, 0xE7, 0xEE));
+
     private void UpdateBadge()
     {
-        var due = _tasks.DueCount(DateTimeOffset.Now);
-        RestingLabel.Text = PillLabel.For(due, _tasks.OpenCount);
-        StatusDot.Fill = due > 0 ? DueBrush
-            : _updates.State == UpdateState.Available ? UpdateBrush
-            : AccentBrush;
+        var now = DateTimeOffset.Now;
+        var due = _tasks.DueCount(now);
+        var counts = PillLabel.For(due, _tasks.OpenCount);
+
+        // A temporary message ("/notch ..." or an agent) takes the notch's place while it lasts; due and open come back after.
+        if (_notch is { } note && note.IsActive(now))
+        {
+            RestingLabel.Text = note.Text;
+            RestingLabel.Foreground = note.Tone == NotchTone.Info ? LabelBrush : ToneBrush(note.Tone);
+            StatusDot.Fill = ToneBrush(note.Tone);
+            var shown = $"{note.Text} ({counts})"; // the counts stay one hover away
+            Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(RestingContent, shown);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RestingContent, shown);
+        }
+        else
+        {
+            RestingLabel.Text = counts;
+            RestingLabel.Foreground = LabelBrush;
+            StatusDot.Fill = due > 0 ? DueBrush
+                : _updates.State == UpdateState.Available ? UpdateBrush
+                : AccentBrush;
+            Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(RestingContent, counts);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RestingContent, counts);
+        }
+
+        ApplyRestingWidth();
+    }
+
+    /// <summary>The resting pill is as wide as what it shows: a long temporary message widens it, and it shrinks back after.</summary>
+    private void ApplyRestingWidth()
+    {
+        RestingStack.Measure(new Windows.Foundation.Size(double.PositiveInfinity, PillAnimator.RestingSize.Height));
+        var width = RestingSizing.Width(RestingStack.DesiredSize.Width, _host.AvailableSizeDip.Width);
+        _restingSize = new SizeD(width, PillAnimator.RestingSize.Height);
+        if (_machine.State == PillState.Resting && Math.Abs(_current.Width - width) >= 1)
+        {
+            Start(_restingSize, PillAnimator.SideDuration);
+        }
+        // In any other state the next collapse (or the arrival at Resting) ends at the new width.
+    }
+
+    // ----- notch message -----
+
+    private static readonly string NotchPath = Path.Combine(DataFolders.Active(), NotchMessageStore.FileName);
+    private NotchMessage? _notch;
+    private FileSystemWatcher? _notchWatcher;
+    private DispatcherQueueTimer? _notchReload;
+    private DispatcherQueueTimer? _notchExpiry;
+
+    /// <summary>
+    /// Shows the message in notch.json on the resting pill. The MCP server writes that file too, so an agent can
+    /// set it while the app runs; the app also drops a message by itself when it expires.
+    /// </summary>
+    private void WatchNotch(DispatcherQueue queue)
+    {
+        _notch = NotchMessageStore.Load(NotchPath, DateTimeOffset.Now);
+        try
+        {
+            var dir = Path.GetDirectoryName(NotchPath)!;
+            Directory.CreateDirectory(dir);
+            _notchReload = queue.CreateTimer();
+            _notchReload.Interval = TimeSpan.FromMilliseconds(250);
+            _notchReload.IsRepeating = false;
+            _notchReload.Tick += (_, _) =>
+            {
+                _notch = NotchMessageStore.Load(NotchPath, DateTimeOffset.Now);
+                UpdateBadge();
+            };
+
+            _notchWatcher = new FileSystemWatcher(dir, NotchMessageStore.FileName) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
+            void Poke(object? sender, EventArgs e) => queue.TryEnqueue(() =>
+            {
+                _notchReload?.Stop();
+                _notchReload?.Start();
+            });
+            _notchWatcher.Changed += Poke;
+            _notchWatcher.Created += Poke;
+            _notchWatcher.Renamed += Poke;
+            _notchWatcher.Deleted += Poke;
+            _notchWatcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not watch notch.json; messages set by other programs will show after a restart", ex);
+        }
+
+        _notchExpiry = queue.CreateTimer();
+        _notchExpiry.Interval = TimeSpan.FromSeconds(15);
+        _notchExpiry.IsRepeating = true;
+        _notchExpiry.Tick += (_, _) =>
+        {
+            if (_notch is { } n && !n.IsActive(DateTimeOffset.Now))
+            {
+                _notch = null;
+                UpdateBadge();
+            }
+        };
+        _notchExpiry.Start();
+        UpdateBadge();
+    }
+
+    /// <summary>The add box's "/notch" command: text sets the message, nothing clears it.</summary>
+    private void OnNotchCommand(string payload)
+    {
+        try
+        {
+            if (payload.Length == 0)
+            {
+                NotchMessageStore.Clear(NotchPath);
+                _notch = null;
+                Log.Info("Notch message cleared");
+            }
+            else
+            {
+                var (tone, text) = NotchMessage.SplitTone(payload);
+                var error = NotchMessage.TryCreate(text, tone, null, DateTimeOffset.Now, out var message);
+                if (error is not null)
+                {
+                    Panel.ShowNudge(error);
+                    return;
+                }
+
+                NotchMessageStore.Save(NotchPath, message!);
+                _notch = message;
+                Log.Info($"Notch message set: {message!.Text}");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not save the notch message", ex);
+        }
+
+        UpdateBadge();
     }
 
     // ----- resizing -----
@@ -638,7 +779,7 @@ public sealed partial class MainWindow : Window
                     StartSide(0); // the settings panel closes together with the pill
                 }
 
-                Start(PillAnimator.RestingSize, PillAnimator.CollapseDuration);
+                Start(_restingSize, PillAnimator.CollapseDuration);
                 break;
             case PillState.Resting:
                 Panel.ClearNudge();
@@ -649,6 +790,7 @@ public sealed partial class MainWindow : Window
                 _side = 0;
                 _sideAnimator = null;
                 _awayTimer.Stop();
+                ApplyRestingWidth(); // a message may have come or gone while the pill was open
                 _host.SetNoActivate(true);
                 break;
         }
@@ -658,7 +800,7 @@ public sealed partial class MainWindow : Window
     {
         // Begin from the on-screen size so reversing mid-animation is continuous.
         // Closing eases in and out so it doesn't snap shut; with Windows animations off the change is instant.
-        var ease = target == PillAnimator.RestingSize ? PillEase.InOutCubic : PillEase.OutCubic;
+        var ease = target == _restingSize ? PillEase.InOutCubic : PillEase.OutCubic;
         if (!_ui.AnimationsEnabled)
         {
             duration = TimeSpan.FromMilliseconds(1);
@@ -775,7 +917,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Cross-fades resting/expanded content from the current size; no layout depends on window size.</summary>
     private void UpdateContent()
     {
-        var t = PillAnimator.ExpansionProgress(_current, ExpandedTarget);
+        var t = PillAnimator.ExpansionProgress(_current, ExpandedTarget, _restingSize);
         RestingContent.Opacity = Math.Clamp(1 - t * 3, 0, 1);
         RestingContent.IsHitTestVisible = _machine.State is PillState.Resting or PillState.Collapsing && t < 0.5;
         Panel.Opacity = Math.Clamp((t - 0.45) / 0.55, 0, 1);

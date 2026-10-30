@@ -41,10 +41,12 @@ public sealed partial class StatusSettingsView : UserControl
     private UIElement BuildRow(StatusDef status, int index, int count)
     {
         var row = new Grid { ColumnSpacing = 4 };
+        // Same columns as the add row under the list (name, Done, three 28 px icon columns), so everything lines up.
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var c = 0; c < 4; c++)
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (var c = 0; c < 3; c++)
         {
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
         }
 
         var name = new TextBox { Text = status.Name, MaxLength = StatusSet.MaxNameLength };
@@ -100,11 +102,12 @@ public sealed partial class StatusSettingsView : UserControl
         var b = new HandButton
         {
             Content = new FontIcon { Glyph = glyph, FontSize = 12 },
-            Padding = new Thickness(7),
+            Width = 28,
+            Padding = new Thickness(0),
             IsEnabled = enabled,
             Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
             BorderThickness = new Thickness(0),
-        };
+        }.Quiet();
         ToolTipService.SetToolTip(b, tip);
         b.Click += (_, _) => Show(action());
         return b;

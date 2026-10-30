@@ -10,13 +10,15 @@
 
         <StackPanel x:Name="Rows" Spacing="4" />
 
-        <Grid ColumnSpacing="8">
+        <!-- Same columns as the rows above, so the name boxes and the Add / delete buttons line up. -->
+        <Grid ColumnSpacing="6">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="28" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="72" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="NewName" PlaceholderText="New tag name" MaxLength="20" KeyDown="OnNewKeyDown" />
-            <ui:HandButton Grid.Column="1" Content="Add" Click="OnAdd" />
+            <TextBox x:Name="NewName" Grid.Column="1" PlaceholderText="New tag name" MaxLength="20" KeyDown="OnNewKeyDown" />
+            <ui:HandButton Grid.Column="2" Content="Add" Click="OnAdd" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
         </Grid>
 
         <TextBlock x:Name="ErrorText" FontSize="12" Foreground="#FFFB7185" TextWrapping="Wrap" Visibility="Collapsed" />
