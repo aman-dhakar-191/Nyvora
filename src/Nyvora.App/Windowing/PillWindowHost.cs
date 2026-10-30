@@ -174,25 +174,27 @@ internal sealed class PillWindowHost : IDisposable
     private const int HotkeyId = 1;
     private bool _hotkeyOn;
 
-    /// <summary>Raised when Ctrl+Alt+N is pressed anywhere in Windows.</summary>
+    /// <summary>Raised when the global shortcut is pressed anywhere in Windows.</summary>
     public event Action? HotkeyPressed;
 
-    /// <summary>Registers or releases Ctrl+Alt+N; false when another app already owns the combination.</summary>
-    public bool SetHotkey(bool on)
+    /// <summary>
+    /// Registers the shortcut (replacing any earlier one), or releases it with null. False when another app already
+    /// owns the combination; in that case no shortcut is registered.
+    /// </summary>
+    public bool SetHotkey(Nyvora.Core.Settings.HotkeySpec? spec)
     {
-        if (on == _hotkeyOn)
-        {
-            return true;
-        }
-
-        if (!on)
+        if (_hotkeyOn)
         {
             UnregisterHotKey(_hwnd, HotkeyId);
             _hotkeyOn = false;
+        }
+
+        if (spec is not { } s)
+        {
             return true;
         }
 
-        _hotkeyOn = RegisterHotKey(_hwnd, HotkeyId, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x4E);
+        _hotkeyOn = RegisterHotKey(_hwnd, HotkeyId, (uint)s.Modifiers | MOD_NOREPEAT, (uint)s.Key);
         return _hotkeyOn;
     }
 
@@ -218,7 +220,7 @@ internal sealed class PillWindowHost : IDisposable
 
     public void Dispose()
     {
-        SetHotkey(false);
+        SetHotkey(null);
         RemoveWindowSubclass(_hwnd, _subclass, 1);
         Log.Info("Window host disposed");
     }

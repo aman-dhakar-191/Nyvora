@@ -36,7 +36,13 @@
                         <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
                         <ui:HandCheckBox x:Name="TopToggle" Content="Always on top" MinWidth="0" Click="OnTopClick" />
                         <ui:HandCheckBox x:Name="CompactToggle" Content="Compact layout (Ctrl+M)" MinWidth="0" Click="OnCompactClick" />
-                        <ui:HandCheckBox x:Name="HotkeyToggle" Content="Ctrl+Alt+N opens Nyvora from any app" MinWidth="0" Click="OnHotkeyClick" />
+                        <ui:HandCheckBox x:Name="HotkeyToggle" Content="Open Nyvora from any app with a shortcut" MinWidth="0" Click="OnHotkeyClick" />
+                        <StackPanel Spacing="4" Margin="28,0,0,0">
+                            <ui:HandButton x:Name="HotkeyButton" Click="OnHotkeyButtonClick" PreviewKeyDown="OnHotkeyKeyDown"
+                                           LostFocus="OnHotkeyLostFocus" HorizontalAlignment="Left"
+                                           ToolTipService.ToolTip="Click, then press the new shortcut" />
+                            <TextBlock x:Name="HotkeyNote" FontSize="11" Foreground="#FF9A9AB0" TextWrapping="Wrap" Visibility="Collapsed" />
+                        </StackPanel>
                         <ui:HandCheckBox x:Name="StartupToggle" Content="Start Nyvora when I sign in" MinWidth="0" Click="OnStartupClick" />
                         <ui:HandCheckBox x:Name="ReminderToggle" MinWidth="0" Click="OnReminderClick"
                                          Content="Every hour, open Nyvora to remind me to update task statuses" />

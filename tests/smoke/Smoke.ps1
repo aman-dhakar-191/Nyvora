@@ -178,6 +178,33 @@ try {
   Click ([int]($open.R - 36 * $scale)) ([int]($open.T + 32 * $scale))   # the Quit icon
   $exited = $proc.WaitForExit(6000)
   Check $exited 'the Quit button closes the app'
+
+  Write-Host 'Compact layout'
+  # A fresh launch with the compact setting on and a few tasks that stress the row layout (long title, overdue, priority).
+  $settingsPath = Join-Path $env:APPDATA 'Nyvora\settings.json'
+  $cfg = if (Test-Path $settingsPath) { Get-Content -Raw -LiteralPath $settingsPath | ConvertFrom-Json } else { [pscustomobject]@{} }
+  $cfg | Add-Member -NotePropertyName CompactMode -NotePropertyValue $true -Force
+  $cfg | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
+  $nowUtc = (Get-Date).ToUniversalTime()
+  $seed = @(
+    @{ Id = [guid]::NewGuid().ToString(); Title = 'Write the quarterly report and send it to everyone on the team'; Done = $false; Created = $nowUtc.ToString('o'); RemindAt = $nowUtc.AddHours(-2).ToString('o'); Notified = $true; Priority = 1; TagIds = @() },
+    @{ Id = [guid]::NewGuid().ToString(); Title = 'Short one'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 0; TagIds = @() },
+    @{ Id = [guid]::NewGuid().ToString(); Title = 'Call the dentist'; Done = $false; Created = $nowUtc.ToString('o'); Priority = 2; TagIds = @() }
+  )
+  ConvertTo-Json -InputObject $seed -Depth 5 | Set-Content -LiteralPath $tasksPath -Encoding UTF8
+  $compactProc = Start-Process -FilePath $Exe -PassThru
+  $cp = Wait-Pill $compactProc { param($p) $p.W -gt 40 -and $p.W -lt 260 * $scale -and $p.H -lt 80 * $scale } 25
+  if ($null -ne $cp) {
+    Start-Sleep -Milliseconds 700
+    Click ([int](($cp.L + $cp.R) / 2)) ([int](($cp.T + $cp.B) / 2))
+    [void](Wait-Pill $compactProc { param($p) $p.W -gt 300 * $scale } 6)
+    Start-Sleep -Milliseconds 900
+    $co = Get-Pill $compactProc
+    Check ($co.W -gt 300 * $scale -and $co.W -lt 400 * $scale) 'compact layout opens narrower than the normal list' ("{0}x{1}" -f $co.W, $co.H)
+    Shot 'compact'
+  } else {
+    Check $false 'compact layout opens narrower than the normal list' 'no pill'
+  }
 }
 catch {
   Write-Host ('smoke test stopped early: ' + $_.Exception.Message)
@@ -186,6 +213,7 @@ catch {
 }
 finally {
   if ($null -ne $proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+  if ($null -ne $compactProc -and -not $compactProc.HasExited) { Stop-Process -Id $compactProc.Id -Force -ErrorAction SilentlyContinue }
 }
 
 if (Test-Path $logPath) {

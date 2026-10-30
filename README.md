@@ -76,10 +76,10 @@ Download `Nyvora-Setup-vX.Y.Z-x64.exe` from the latest release and run it. It in
 
 | Keys | Does |
 |---|---|
-| Ctrl+Alt+N | From any app: open Nyvora with the cursor in the add box (Settings → General turns it off; it stays off if another app already owns the combination) |
+| Ctrl+Alt+N (default) | From any app: open Nyvora with the cursor in the add box. Settings → General lets you turn it off or press a different combination (Ctrl, Alt or Win plus a letter, digit or F-key); if another app already owns it, Nyvora says so and keeps the old one |
 | Ctrl+N | Jump to the add box (leaves search) |
 | Ctrl+F | Search |
-| Ctrl+M | Compact layout (a narrow list; fixed size, so the resize grip is off) |
+| Ctrl+M | Compact layout: a narrow list with a colored status dot instead of the status name, and the controls on a line under each title (fixed size, so the resize grip is off) |
 | Ctrl+Z | Bring back the task you just deleted (not while typing in a box, where it undoes typing) |
 | Esc | Cancel an edit, close search, or collapse |
 

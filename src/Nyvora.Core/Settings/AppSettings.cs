@@ -33,6 +33,9 @@ public sealed class AppSettings
     /// <summary>Ctrl+Alt+N opens Nyvora ready to type from any app. Off if another app already owns the combination.</summary>
     public bool GlobalHotkey { get; set; } = true;
 
+    /// <summary>The global shortcut, like "Ctrl+Alt+N". Invalid text falls back to the default (see <see cref="HotkeySpec"/>).</summary>
+    public string Hotkey { get; set; } = HotkeySpec.Default.ToString();
+
     /// <summary>User-defined tags (name and color). Validated by <see cref="TagSet"/>.</summary>
     public List<TagDef> Tags { get; set; } = new();
 

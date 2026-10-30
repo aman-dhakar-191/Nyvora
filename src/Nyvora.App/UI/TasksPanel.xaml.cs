@@ -1,4 +1,5 @@
 using Microsoft.UI;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
@@ -150,17 +151,48 @@ public sealed partial class TasksPanel : UserControl
             return; // the reminder card shows one task; there is no list to search
         }
 
-        SearchBar.Visibility = Visibility.Visible;
-        InputRow.Visibility = Visibility.Collapsed; // adding while searching is confusing: the new task may not match
         ReminderPicker.Visibility = Visibility.Collapsed;
+        SwapInputAndSearch(search: true); // adding while searching is confusing: the new task may not match
         SearchBox.Focus(FocusState.Programmatic);
         SearchBox.SelectAll();
     }
 
+    private bool _searchOpen;
+    private DispatcherQueueTimer? _swapTimer;
+
+    /// <summary>The add box and the search box share one row: one fades out as the other fades in, so the list never jumps.</summary>
+    private void SwapInputAndSearch(bool search)
+    {
+        _searchOpen = search;
+        var show = search ? (UIElement)SearchBar : InputRow;
+        var hide = search ? (UIElement)InputRow : SearchBar;
+        if (_swapTimer is null)
+        {
+            var fade = TimeSpan.FromMilliseconds(150);
+            InputRow.OpacityTransition = new ScalarTransition { Duration = fade };
+            SearchBar.OpacityTransition = new ScalarTransition { Duration = fade };
+            _swapTimer = DispatcherQueue.CreateTimer();
+            _swapTimer.Interval = TimeSpan.FromMilliseconds(170);
+            _swapTimer.IsRepeating = false;
+            _swapTimer.Tick += (_, _) => (_searchOpen ? (UIElement)InputRow : SearchBar).Visibility = Visibility.Collapsed;
+        }
+
+        show.Visibility = Visibility.Visible;
+        show.IsHitTestVisible = true;
+        hide.IsHitTestVisible = false;
+        // Set after the element is laid out, so the opacity change is animated rather than applied at once.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            show.Opacity = 1;
+            hide.Opacity = 0;
+        });
+        _swapTimer.Stop();
+        _swapTimer.Start();
+    }
+
     private void CloseSearch()
     {
-        SearchBar.Visibility = Visibility.Collapsed;
-        InputRow.Visibility = Visibility.Visible;
+        SwapInputAndSearch(search: false);
         if (SearchBox.Text.Length > 0)
         {
             SearchBox.Text = ""; // TextChanged clears the filter and redraws
@@ -367,16 +399,44 @@ public sealed partial class TasksPanel : UserControl
 
     private bool _showDone;
 
+    private bool _compact;
+
+    /// <summary>Compact layout: a status dot instead of the name, and the secondary controls on a line under the title.</summary>
+    public void SetCompact(bool on)
+    {
+        if (_compact == on)
+        {
+            return;
+        }
+
+        _compact = on;
+        Refresh();
+    }
+
     private UIElement BuildRow(TaskItem item, DateTimeOffset now)
     {
         var isDue = TaskList.IsDue(item, now);
         // Secondary actions stay invisible (but keep their space, so nothing shifts) until the row is hovered or focused.
         var reveal = new List<UIElement>();
         var row = new Grid { ColumnSpacing = 6 };
-        row.RowDefinitions.Add(new RowDefinition { MinHeight = 38 });
+        // Compact: the title gets the whole width and the quiet controls move to their own line below it.
+        var meta = _compact ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 } : null;
+        void Place(UIElement el, int column)
+        {
+            if (meta is not null)
+            {
+                meta.Children.Add(el);
+                return;
+            }
+
+            Grid.SetColumn(el, column);
+            row.Children.Add(el);
+        }
+
+        row.RowDefinitions.Add(new RowDefinition { MinHeight = _compact ? 32 : 38 });
         row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // tags, aligned under the title
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) }); // fixed, so every title starts at the same x
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(_compact ? 18 : 90) }); // fixed, so every title starts at the same x
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -442,6 +502,11 @@ public sealed partial class TasksPanel : UserControl
             }
         }), true);
         Grid.SetColumn(title, 2);
+        if (meta is not null)
+        {
+            Grid.SetColumnSpan(title, 5); // the empty control columns would otherwise eat into the title's width
+        }
+
         row.Children.Add(title);
 
         // Hover shows the whole title, wrapped; leaving restores the trimmed single line.
@@ -512,8 +577,7 @@ public sealed partial class TasksPanel : UserControl
                 _editingReminder = null;
                 Refresh();
             };
-            Grid.SetColumn(tagButton, 3);
-            row.Children.Add(tagButton);
+            Place(tagButton, 3);
             if (itemTags.Count == 0 && _editingTags != item.Id)
             {
                 reveal.Add(tagButton);
@@ -547,8 +611,7 @@ public sealed partial class TasksPanel : UserControl
                 _editingTags = null;
                 Refresh();
             };
-            Grid.SetColumn(when, 4);
-            row.Children.Add(when);
+            Place(when, 4);
             if (item.RemindAt is null && _editingReminder != item.Id)
             {
                 reveal.Add(when);
@@ -568,8 +631,7 @@ public sealed partial class TasksPanel : UserControl
             };
             ToolTipService.SetToolTip(snooze, $"Snooze {(int)Reminders.SnoozeDuration.TotalMinutes} minutes");
             snooze.Click += (_, _) => _tasks.Snooze(item.Id, DateTimeOffset.Now, Reminders.SnoozeDuration);
-            Grid.SetColumn(snooze, 5);
-            row.Children.Add(snooze);
+            Place(snooze, 5);
         }
 
         var delete = new HandButton
@@ -621,13 +683,16 @@ public sealed partial class TasksPanel : UserControl
             actions.Children.Add(prio);
             reveal.Add(prio);
 
-            actions.Children.Add(edit);
-            reveal.Add(edit);
+            if (!_compact)
+            {
+                // Compact rows leave the pencil out for space; double-clicking the title still edits.
+                actions.Children.Add(edit);
+                reveal.Add(edit);
+            }
         }
 
         actions.Children.Add(delete);
-        Grid.SetColumn(actions, 6);
-        row.Children.Add(actions);
+        Place(actions, 6);
         reveal.Add(delete);
 
         foreach (var el in reveal)
@@ -639,6 +704,15 @@ public sealed partial class TasksPanel : UserControl
 
         var stack = new StackPanel { Spacing = 2 };
         stack.Children.Add(row);
+
+        if (meta is not null)
+        {
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // the tag chips go below the controls
+            Grid.SetRow(meta, 1);
+            Grid.SetColumn(meta, 2);
+            Grid.SetColumnSpan(meta, 5);
+            row.Children.Add(meta);
+        }
 
         if (itemTags.Count > 0)
         {
@@ -654,7 +728,7 @@ public sealed partial class TasksPanel : UserControl
                 line.Children.Add(new TextBlock { Text = $"+{itemTags.Count - 4}", FontSize = 11, Foreground = MutedBrush, VerticalAlignment = VerticalAlignment.Center });
             }
 
-            Grid.SetRow(line, 1);
+            Grid.SetRow(line, meta is null ? 1 : 2);
             Grid.SetColumn(line, 2);
             Grid.SetColumnSpan(line, 5);
             row.Children.Add(line);
@@ -1022,6 +1096,27 @@ public sealed partial class TasksPanel : UserControl
     {
         var status = _tasks.StatusOf(item);
         var color = status.IsDone ? DoneColor : OpenColors[Math.Max(0, _tasks.Statuses.IndexOf(status.Id)) % OpenColors.Length];
+        if (_compact)
+        {
+            // A small colored dot; the name is in the tooltip and clicking still steps the status.
+            var dot = new HandButton
+            {
+                Width = 12,
+                Height = 12,
+                MinWidth = 0,
+                MinHeight = 0,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(color),
+                BorderThickness = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            ToolTipService.SetToolTip(dot, $"{status.Name}: click to change status");
+            dot.Click += (_, _) => _tasks.CycleStatus(item.Id);
+            return dot;
+        }
+
         var chip = new HandButton
         {
             // Every chip fills the same fixed column, so the pills line up as a neat column and short names leave no gap.

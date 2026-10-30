@@ -1,7 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Nyvora.App.Services;
+using Nyvora.Core.Settings;
 using Nyvora.Core.Tasks;
+using Windows.System;
 
 namespace Nyvora.App.UI;
 
@@ -18,15 +21,106 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? CompactChanged;
 
-    public event Action<bool>? HotkeyChanged;
+    public event Action<bool>? HotkeyEnabledChanged;
+
+    /// <summary>The user pressed a new shortcut; the owner tries to register it and calls <see cref="SetHotkey"/> with the outcome.</summary>
+    public event Action<HotkeySpec>? HotkeyKeysChanged;
 
     public event Action<bool>? StatusReminderChanged;
 
-    internal void SetLayoutOptions(bool compact, bool hotkey)
+    private HotkeySpec _hotkey = HotkeySpec.Default;
+    private bool _capturing;
+
+    internal void SetLayoutOptions(bool compact, bool hotkeyOn, HotkeySpec hotkey)
     {
         CompactToggle.IsChecked = compact;
-        HotkeyToggle.IsChecked = hotkey;
+        HotkeyToggle.IsChecked = hotkeyOn;
+        SetHotkey(hotkey, null);
     }
+
+    /// <summary>Shows the shortcut in use; <paramref name="note"/> explains a problem (for example, it is taken).</summary>
+    internal void SetHotkey(HotkeySpec hotkey, string? note)
+    {
+        _hotkey = hotkey;
+        _capturing = false;
+        HotkeyButton.Content = hotkey + "  (click to change)";
+        HotkeyNote.Text = note ?? "";
+        HotkeyNote.Visibility = note is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnHotkeyButtonClick(object sender, RoutedEventArgs e)
+    {
+        _capturing = true;
+        HotkeyButton.Content = "Press the new shortcut… (Esc cancels)";
+        HotkeyNote.Text = "Use Ctrl, Alt or Win with a letter, digit or F-key.";
+        HotkeyNote.Visibility = Visibility.Visible;
+        HotkeyButton.Focus(FocusState.Programmatic);
+    }
+
+    private void OnHotkeyLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_capturing)
+        {
+            SetHotkey(_hotkey, null); // clicked away: keep what we had
+        }
+    }
+
+    private void OnHotkeyKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (!_capturing)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var key = e.Key;
+        if (key == VirtualKey.Escape)
+        {
+            SetHotkey(_hotkey, null);
+            return;
+        }
+
+        if (key is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl
+            or VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu
+            or VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift
+            or VirtualKey.LeftWindows or VirtualKey.RightWindows)
+        {
+            return; // modifiers alone: wait for the real key
+        }
+
+        var mods = HotkeyModifiers.None;
+        if (Down(VirtualKey.Control))
+        {
+            mods |= HotkeyModifiers.Control;
+        }
+
+        if (Down(VirtualKey.Menu))
+        {
+            mods |= HotkeyModifiers.Alt;
+        }
+
+        if (Down(VirtualKey.Shift))
+        {
+            mods |= HotkeyModifiers.Shift;
+        }
+
+        if (Down(VirtualKey.LeftWindows) || Down(VirtualKey.RightWindows))
+        {
+            mods |= HotkeyModifiers.Win;
+        }
+
+        var spec = new HotkeySpec(mods, (int)key);
+        if (!spec.IsValid)
+        {
+            HotkeyNote.Text = $"{spec} won't work: use Ctrl, Alt or Win with a letter, digit or F-key.";
+            return;
+        }
+
+        HotkeyKeysChanged?.Invoke(spec);
+    }
+
+    private static bool Down(VirtualKey key) =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     public event Action<bool>? LaunchAtSignInChanged;
 
@@ -149,7 +243,7 @@ public sealed partial class SettingsView : UserControl
 
     private void OnCompactClick(object sender, RoutedEventArgs e) => CompactChanged?.Invoke(CompactToggle.IsChecked == true);
 
-    private void OnHotkeyClick(object sender, RoutedEventArgs e) => HotkeyChanged?.Invoke(HotkeyToggle.IsChecked == true);
+    private void OnHotkeyClick(object sender, RoutedEventArgs e) => HotkeyEnabledChanged?.Invoke(HotkeyToggle.IsChecked == true);
 
     private void OnStartupClick(object sender, RoutedEventArgs e) =>
         LaunchAtSignInChanged?.Invoke(StartupToggle.IsChecked == true);

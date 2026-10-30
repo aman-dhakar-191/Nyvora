@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Nyvora.App.Services;
 using Nyvora.App.Windowing;
 using Nyvora.Core.Animation;
+using Nyvora.Core.Settings;
 using Nyvora.Core.Storage;
 using Nyvora.Core.State;
 using Nyvora.Core.Tasks;
@@ -111,14 +112,32 @@ public sealed partial class MainWindow : Window
             _statusNudge.SetInterval(TimeSpan.FromMinutes(minutes), DateTimeOffset.Now);
         };
         _compact = _settings.Current.CompactMode;
+        Panel.SetCompact(_compact);
         ApplyPanelSize();
-        Side.SetLayoutOptions(_compact, _settings.Current.GlobalHotkey);
+        Side.SetLayoutOptions(_compact, _settings.Current.GlobalHotkey, HotkeySpec.FromSettings(_settings.Current.Hotkey));
         Side.CompactChanged += SetCompact;
-        Side.HotkeyChanged += on =>
+        Side.HotkeyEnabledChanged += on =>
         {
             _settings.Current.GlobalHotkey = on;
             _settings.Save();
             ApplyHotkey();
+        };
+        Side.HotkeyKeysChanged += spec =>
+        {
+            var previous = HotkeySpec.FromSettings(_settings.Current.Hotkey);
+            if (_settings.Current.GlobalHotkey && !_host.SetHotkey(spec))
+            {
+                // Another app owns it: keep the old shortcut working and say why the new one was refused.
+                _host.SetHotkey(previous);
+                Log.Info($"Global shortcut {spec} is taken by another app; keeping {previous}");
+                Side.SetHotkey(previous, $"{spec} is already used by another app. Try a different one.");
+                return;
+            }
+
+            _settings.Current.Hotkey = spec.ToString();
+            _settings.Save();
+            Log.Info($"Global shortcut changed to {spec}");
+            Side.SetHotkey(spec, null);
         };
         _host.HotkeyPressed += OnHotkey;
         ApplyHotkey();
@@ -489,10 +508,12 @@ public sealed partial class MainWindow : Window
 
     private void ApplyHotkey()
     {
-        var ok = _host.SetHotkey(_settings.Current.GlobalHotkey);
+        var spec = HotkeySpec.FromSettings(_settings.Current.Hotkey);
+        var ok = _host.SetHotkey(_settings.Current.GlobalHotkey ? spec : null);
         Log.Info(_settings.Current.GlobalHotkey
-            ? (ok ? "Global shortcut Ctrl+Alt+N registered" : "Global shortcut Ctrl+Alt+N is taken by another app")
+            ? (ok ? $"Global shortcut {spec} registered" : $"Global shortcut {spec} is taken by another app")
             : "Global shortcut off");
+        Side.SetHotkey(spec, _settings.Current.GlobalHotkey && !ok ? $"{spec} is already used by another app. Pick a different shortcut." : null);
     }
 
     private void OnHotkey()
@@ -524,7 +545,8 @@ public sealed partial class MainWindow : Window
         _compact = on;
         _settings.Current.CompactMode = on;
         _settings.Save();
-        Side.SetLayoutOptions(on, _settings.Current.GlobalHotkey);
+        Side.SetLayoutOptions(on, _settings.Current.GlobalHotkey, HotkeySpec.FromSettings(_settings.Current.Hotkey));
+        Panel.SetCompact(on);
         Log.Info(on ? "Compact layout on" : "Compact layout off");
         if (_machine.State == PillState.Expanded && !_focusMode)
         {

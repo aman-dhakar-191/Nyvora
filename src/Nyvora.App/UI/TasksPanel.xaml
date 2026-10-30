@@ -61,20 +61,20 @@
             </ui:HandButton>
         </Grid>
 
+        <!-- Search: opens with the magnifier or Ctrl+F; filters the list as you type. -->
+        <Grid x:Name="SearchBar" Grid.Row="1" Visibility="Collapsed" Opacity="0" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SearchBox" PlaceholderText="Search tasks, #tags, !priority…" MaxLength="100" MinHeight="38"
+                     VerticalContentAlignment="Center" Padding="12,6,12,0" TextChanged="OnSearchChanged" KeyDown="OnSearchKeyDown" />
+            <ui:HandButton Grid.Column="1" Click="OnSearchClose" Padding="8" BorderThickness="0" Background="Transparent"
+                           ToolTipService.ToolTip="Close search (Esc)">
+                <FontIcon Glyph="&#xE711;" FontSize="12" />
+            </ui:HandButton>
+        </Grid>
         <StackPanel Grid.Row="2" Spacing="8">
-            <!-- Search: opens with the magnifier or Ctrl+F; filters the list as you type. -->
-            <Grid x:Name="SearchBar" Visibility="Collapsed" ColumnSpacing="6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBox x:Name="SearchBox" PlaceholderText="Search tasks, #tags, !priority…" MaxLength="100" MinHeight="34"
-                         VerticalContentAlignment="Center" Padding="12,6,12,0" TextChanged="OnSearchChanged" KeyDown="OnSearchKeyDown" />
-                <ui:HandButton Grid.Column="1" Click="OnSearchClose" Padding="8" BorderThickness="0" Background="Transparent"
-                               ToolTipService.ToolTip="Close search (Esc)">
-                    <FontIcon Glyph="&#xE711;" FontSize="12" />
-                </ui:HandButton>
-            </Grid>
             <!-- Opens under the input only when the reminder button is clicked. -->
             <Border x:Name="ReminderPicker" Visibility="Collapsed" CornerRadius="8"
                     Background="#14FFFFFF" Padding="10,8" />
