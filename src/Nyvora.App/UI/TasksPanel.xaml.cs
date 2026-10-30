@@ -383,6 +383,16 @@ public sealed partial class TasksPanel : UserControl
             title.Inlines.Add(new Run { Text = item.Title });
         }
 
+        if (item.Priority == TaskPriority.High && !item.Done)
+        {
+            title.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+        }
+
+        if (item.Done)
+        {
+            row.Opacity = 0.7; // finished work recedes
+        }
+
         ToolTipService.SetToolTip(title, "Double-click to edit");
         title.DoubleTapped += (_, e) =>
         {
@@ -411,18 +421,35 @@ public sealed partial class TasksPanel : UserControl
         // Hover shows the whole title, wrapped; leaving restores the trimmed single line.
         row.Background = new SolidColorBrush(Colors.Transparent); // so the empty parts of the row get pointer events too
         row.CornerRadius = new CornerRadius(6);
+        // Fade the highlight in and out instead of snapping.
+        row.BackgroundTransition = new BrushTransition { Duration = TimeSpan.FromMilliseconds(140) };
+
+        // A title that is cut off grows to show everything, but only once the pointer rests on the row. Sweeping
+        // the mouse down the list never makes rows jump, and a title that already fits never changes.
+        var expandTimer = DispatcherQueue.CreateTimer();
+        expandTimer.Interval = TimeSpan.FromMilliseconds(380);
+        expandTimer.IsRepeating = false;
+        expandTimer.Tick += (_, _) =>
+        {
+            if (title.IsTextTrimmed)
+            {
+                title.TextTrimming = TextTrimming.None;
+                title.TextWrapping = TextWrapping.Wrap;
+            }
+        };
         row.PointerEntered += (_, _) =>
         {
-            title.TextTrimming = TextTrimming.None;
-            title.TextWrapping = TextWrapping.Wrap;
             row.Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF));
             foreach (var el in reveal)
             {
                 el.Opacity = 1;
             }
+
+            expandTimer.Start();
         };
         row.PointerExited += (_, _) =>
         {
+            expandTimer.Stop();
             title.TextWrapping = TextWrapping.NoWrap;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
             row.Background = new SolidColorBrush(Colors.Transparent);
@@ -479,9 +506,11 @@ public sealed partial class TasksPanel : UserControl
                     FontSize = 12,
                     Foreground = isDue ? DueBrush : TaskList.IsLaterToday(item, now) ? TodayBrush : MutedBrush,
                 },
-                Padding = new Thickness(6, 2, 6, 2),
+                Padding = new Thickness(isDue ? 9 : 6, 2, isDue ? 9 : 6, 2),
                 MinHeight = 0,
-                Background = new SolidColorBrush(Colors.Transparent),
+                CornerRadius = new CornerRadius(10),
+                // An overdue reminder is a small amber pill, so it stands out from the quiet grey ones.
+                Background = new SolidColorBrush(isDue ? Color.FromArgb(0x26, 0xFB, 0xBF, 0x24) : Colors.Transparent),
                 BorderThickness = new Thickness(0),
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -571,6 +600,7 @@ public sealed partial class TasksPanel : UserControl
         foreach (var el in reveal)
         {
             el.Opacity = 0;
+            el.OpacityTransition = new ScalarTransition { Duration = TimeSpan.FromMilliseconds(120) }; // after the first 0: no flash on redraw
             el.GotFocus += (_, _) => el.Opacity = 1; // keyboard users still find them
         }
 
@@ -780,55 +810,168 @@ public sealed partial class TasksPanel : UserControl
             _tasks.SetReminder(item.Id, at);
         }
 
-        HandButton Button(string label, Action onClick, bool enabled = true)
+        return new Border
+        {
+            Margin = new Thickness(0, 0, 0, 6),
+            Padding = new Thickness(10, 8, 10, 8),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+            Child = BuildReminderPicker(item.RemindAt, Apply, () =>
+            {
+                _editingReminder = null;
+                Refresh();
+            }),
+        };
+    }
+
+    /// <summary>
+    /// The one reminder picker (beside the input and on a task): quick choices, a box that understands plain words
+    /// ("in 2h", "tomorrow 9am", "fri 5pm", "nov 2") with a live preview, and the time picker one click away.
+    /// <paramref name="pick"/> gets the chosen time, or null for Clear; <paramref name="close"/> is for Esc.
+    /// </summary>
+    private UIElement BuildReminderPicker(DateTimeOffset? current, Action<DateTimeOffset?> pick, Action close)
+    {
+        var now = DateTimeOffset.Now;
+
+        HandButton Chip(string label, Func<DateTimeOffset?> at, bool enabled = true)
         {
             var b = new HandButton { Content = label, FontSize = 12, Padding = new Thickness(8, 2, 8, 2), MinHeight = 0, IsEnabled = enabled };
-            b.Click += (_, _) => onClick();
+            b.Click += (_, _) => pick(at());
             return b;
         }
 
-        var presets = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        presets.Children.Add(Button("10 min", () => Apply(Reminders.Resolve(ReminderPreset.InTenMinutes, DateTimeOffset.Now))));
-        presets.Children.Add(Button("1 hour", () => Apply(Reminders.Resolve(ReminderPreset.InOneHour, DateTimeOffset.Now))));
-        presets.Children.Add(Button("Tomorrow 9:00", () => Apply(Reminders.Resolve(ReminderPreset.TomorrowMorning, DateTimeOffset.Now))));
-        presets.Children.Add(Button("Clear", () => Apply(null), enabled: item.RemindAt is not null));
+        DateTimeOffset? Parsed(string text)
+        {
+            var n = DateTimeOffset.Now;
+            return ReminderText.TryParse(text, n, out var at) ? at : null;
+        }
 
-        // A time that has already passed today means the same time tomorrow (see Reminders.TryParseClock).
-        var now = DateTimeOffset.Now;
+        var quick1 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        quick1.Children.Add(Chip("In 10 min", () => DateTimeOffset.Now.AddMinutes(10)));
+        quick1.Children.Add(Chip("In 1 hour", () => DateTimeOffset.Now.AddHours(1)));
+        if (now.Hour < 17)
+        {
+            quick1.Children.Add(Chip("This evening", () => Parsed("today 18:00")));
+        }
+
+        var quick2 = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        quick2.Children.Add(Chip("Tomorrow 9:00", () => Parsed("tomorrow 9am")));
+        quick2.Children.Add(Chip("Next Mon 9:00", () => Parsed("next monday 9am")));
+        quick2.Children.Add(Chip("Clear", () => null, enabled: current is not null));
+
+        DateTimeOffset? typed = null;
+        var input = new TextBox
+        {
+            PlaceholderText = "Or type: in 2h, tomorrow 9am, fri 5pm, nov 2",
+            MaxLength = 40,
+            MinHeight = 32,
+            Padding = new Thickness(10, 6, 10, 6),
+        };
+        ClipboardText.Attach(input);
+        var preview = new TextBlock { FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap };
+        var set = new HandButton { Content = "Set", IsEnabled = false, Padding = new Thickness(14, 4, 14, 4), VerticalAlignment = VerticalAlignment.Top };
+
+        input.TextChanged += (_, _) =>
+        {
+            var n = DateTimeOffset.Now;
+            if (string.IsNullOrWhiteSpace(input.Text))
+            {
+                typed = null;
+                preview.Text = current is { } c ? "Now: " + Reminders.FormatDue(c, n) : "";
+                preview.Foreground = MutedBrush;
+            }
+            else if (ReminderText.TryParse(input.Text, n, out var at))
+            {
+                typed = at;
+                preview.Text = "→ " + Reminders.FormatDue(at, n);
+                preview.Foreground = TodayBrush;
+            }
+            else
+            {
+                typed = null;
+                preview.Text = "Not understood yet. Try \u201cin 2h\u201d, \u201ctomorrow 9am\u201d or \u201cfri 17:00\u201d.";
+                preview.Foreground = MutedBrush;
+            }
+
+            set.IsEnabled = typed is not null;
+        };
+        input.KeyDown += (_, e) =>
+        {
+            if (e.Key == VirtualKey.Enter)
+            {
+                if (typed is { } at)
+                {
+                    pick(at);
+                }
+
+                e.Handled = true;
+            }
+            else if (e.Key == VirtualKey.Escape)
+            {
+                close(); // closes the picker; it must not collapse the pill
+                e.Handled = true;
+            }
+        };
+        set.Click += (_, _) =>
+        {
+            if (typed is { } at)
+            {
+                pick(at);
+            }
+        };
+        input.Loaded += (_, _) => input.Focus(FocusState.Programmatic);
+        if (current is { } cur)
+        {
+            preview.Text = "Now: " + Reminders.FormatDue(cur, now);
+        }
+
+        var typedRow = new Grid { ColumnSpacing = 8 };
+        typedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        typedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        typedRow.Children.Add(input);
+        Grid.SetColumn(set, 1);
+        typedRow.Children.Add(set);
+
+        // The time picker stays available, one click away, so the common case is not buried under it.
         var suggestion = now.AddMinutes(15 - now.Minute % 15);
         var picker = new TimePicker { Time = new TimeSpan(suggestion.Hour, suggestion.Minute, 0), HorizontalAlignment = HorizontalAlignment.Left };
-        picker.Loaded += (_, _) => picker.StartBringIntoView(); // the list area is small; keep the editor visible
-        void SetFromPicker()
+        var setTime = new HandButton { Content = "Set", Padding = new Thickness(14, 5, 14, 5), VerticalAlignment = VerticalAlignment.Center };
+        setTime.Click += (_, _) =>
         {
             var t = picker.Time;
             if (Reminders.TryParseClock($"{t.Hours}:{t.Minutes:00}", DateTimeOffset.Now, out var at))
             {
-                Apply(at);
+                pick(at);
             }
-        }
-
-        var custom = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        custom.Children.Add(picker);
-        custom.Children.Add(new HandButton
+        };
+        var timeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Visibility = Visibility.Collapsed };
+        timeRow.Children.Add(picker);
+        timeRow.Children.Add(setTime);
+        var more = new HandButton
         {
-            Content = "Set",
-            Padding = new Thickness(14, 5, 14, 5),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        ((HandButton)custom.Children[1]).Click += (_, _) => SetFromPicker();
+            Content = "Pick a time\u2026",
+            FontSize = 12,
+            Padding = new Thickness(4, 2, 8, 2),
+            MinHeight = 0,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            Foreground = MutedBrush,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        more.Click += (_, _) =>
+        {
+            more.Visibility = Visibility.Collapsed;
+            timeRow.Visibility = Visibility.Visible;
+        };
 
         var box = new StackPanel { Spacing = 8 };
-        box.Children.Add(presets);
-        box.Children.Add(custom);
-
-        return new Border
-        {
-            Margin = new Thickness(30, 0, 0, 6),
-            Padding = new Thickness(10, 8, 10, 8),
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
-            Child = box,
-        };
+        box.Children.Add(quick1);
+        box.Children.Add(quick2);
+        box.Children.Add(typedRow);
+        box.Children.Add(preview);
+        box.Children.Add(more);
+        box.Children.Add(timeRow);
+        return box;
     }
 
     // Done is green; open statuses take a colour by their position so neighbours are easy to tell apart.
@@ -880,35 +1023,22 @@ public sealed partial class TasksPanel : UserControl
 
     private void OnReminderButtonClick(object sender, RoutedEventArgs e)
     {
-        var opening = ReminderPicker.Visibility == Visibility.Collapsed;
-        ReminderPicker.Visibility = opening ? Visibility.Visible : Visibility.Collapsed;
-        if (opening)
+        if (ReminderPicker.Visibility == Visibility.Visible)
         {
-            var now = DateTimeOffset.Now;
-            var next = now.AddMinutes(15 - now.Minute % 15);
-            PickerTime.Time = new TimeSpan(next.Hour, next.Minute, 0);
-            PickerClear.IsEnabled = _pendingPreset != ReminderPreset.None || _pendingAt is not null;
+            ReminderPicker.Visibility = Visibility.Collapsed;
+            return;
         }
-    }
 
-    private void OnPickPreset(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { Tag: string tag } && Enum.TryParse<ReminderPreset>(tag, out var preset))
-        {
-            Arm(preset, null);
-        }
+        ReminderPicker.Child = BuildReminderPicker(
+            _pendingAt,
+            at => Arm(ReminderPreset.None, at),
+            () =>
+            {
+                ReminderPicker.Visibility = Visibility.Collapsed;
+                Input.Focus(FocusState.Programmatic);
+            });
+        ReminderPicker.Visibility = Visibility.Visible;
     }
-
-    private void OnPickerSet(object sender, RoutedEventArgs e)
-    {
-        var t = PickerTime.Time;
-        if (Reminders.TryParseClock($"{t.Hours}:{t.Minutes:00}", DateTimeOffset.Now, out var at))
-        {
-            Arm(ReminderPreset.None, at);
-        }
-    }
-
-    private void OnPickClear(object sender, RoutedEventArgs e) => Arm(ReminderPreset.None, null);
 
     private void Arm(ReminderPreset preset, DateTimeOffset? at)
     {

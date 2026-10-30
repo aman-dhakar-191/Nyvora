@@ -35,6 +35,26 @@ public static class Reminders
     public static bool TryParseClock(string? text, DateTimeOffset now, out DateTimeOffset at)
     {
         at = default;
+        if (!TryParseTimeOfDay(text, out var time))
+        {
+            return false;
+        }
+
+        var candidate = new DateTimeOffset(now.Date.Add(time), now.Offset);
+        at = candidate > now ? candidate : candidate.AddDays(1);
+        return true;
+    }
+
+    /// <summary>Parses a time of day ("14:30", "9", "2:30 pm", "12am", "noon") without any date.</summary>
+    public static bool TryParseTimeOfDay(string? text, out TimeSpan time)
+    {
+        time = default;
+        if (string.Equals(text?.Trim(), "noon", StringComparison.OrdinalIgnoreCase))
+        {
+            time = TimeSpan.FromHours(12);
+            return true;
+        }
+
         var m = text is null ? null : Clock.Match(text);
         if (m is null || !m.Success)
         {
@@ -63,8 +83,7 @@ public static class Reminders
             return false;
         }
 
-        var candidate = new DateTimeOffset(now.Date.AddHours(hour).AddMinutes(minute), now.Offset);
-        at = candidate > now ? candidate : candidate.AddDays(1);
+        time = new TimeSpan(hour, minute, 0);
         return true;
     }
 

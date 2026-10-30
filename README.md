@@ -51,6 +51,12 @@ In GitHub go to **Actions → Release → Run workflow** and choose **patch**, *
 
 See [docs/ROADMAP.md](docs/ROADMAP.md#known-limitations). In short: the visual and native-window behavior was written without being run on Windows yet and needs the manual checklist; edges are clipped with a window region (not anti-aliased); only the primary display is used.
 
+## Reminders, hover and hierarchy
+
+- **Reminder picker** (the ⏰ beside the input, or the reminder button on a task): quick choices (in 10 min, in 1 hour, this evening, tomorrow 9:00, next Monday 9:00, clear), a box that understands plain words with a live preview, and the time picker behind "Pick a time…". The box takes `in 2h`, `30 min`, `1 day`, `tomorrow 9am`, `tonight`, `fri 5pm`, `next monday`, `nov 2 3pm`, `2 nov`, `2026-11-05 14:00` or just `14:30`; the result is always in the future (`fri 9am` on a Friday afternoon means next Friday). Enter sets it, Esc closes the picker.
+- **Hover:** the row highlight and its action buttons fade in. A title that is cut off expands to show everything after the pointer rests on the row for a moment; a title that already fits never changes, and sweeping the mouse down the list does not make rows jump.
+- **Hierarchy:** overdue reminders are an amber pill, high-priority titles are bold, finished tasks are dimmed.
+
 ## Priority and search
 
 - **Priority:** each open task has a flag button (visible on hover). One click steps through none, high, medium, low. A colored dot in front of the title shows it (red, amber, blue). Within the same status, higher priority is listed first; an In progress task still sits above a To do task of any priority.
