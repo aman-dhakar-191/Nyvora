@@ -121,6 +121,18 @@ public sealed partial class SettingsView : UserControl
         }
     }
 
+    private void OnNav(object sender, RoutedEventArgs e)
+    {
+        FrameworkElement target = (sender as FrameworkElement)?.Tag as string switch
+        {
+            "general" => SecGeneral,
+            "tasks" => SecTasks,
+            "agents" => SecAgents,
+            _ => SecUpdates,
+        };
+        target.StartBringIntoView(new BringIntoViewOptions { AnimationDesired = true, VerticalAlignmentRatio = 0.0 });
+    }
+
     private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);

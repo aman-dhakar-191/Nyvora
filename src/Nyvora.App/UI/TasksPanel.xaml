@@ -5,6 +5,10 @@
     xmlns:ui="using:Nyvora.App.UI"
     RequestedTheme="Dark">
 
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="OnSearchAccelerator" />
+    </UserControl.KeyboardAccelerators>
+
     <Grid>
     <Grid x:Name="TasksView" Padding="22,18,22,14" RowSpacing="12">
         <Grid.RowDefinitions>
@@ -25,6 +29,10 @@
                 <TextBlock x:Name="Summary" FontSize="12" Foreground="#FF8A8AA0" Margin="20,0,0,0" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Top">
+                <ui:HandButton Click="OnSearchClick" Padding="7" BorderThickness="0" Background="Transparent"
+                               ToolTipService.ToolTip="Search tasks (Ctrl+F)">
+                    <FontIcon Glyph="&#xE721;" FontSize="14" />
+                </ui:HandButton>
                 <ui:HandButton Click="OnSettingsClick" Padding="7" BorderThickness="0" Background="Transparent"
                                ToolTipService.ToolTip="Settings">
                     <FontIcon Glyph="&#xE713;" FontSize="14" />
@@ -53,25 +61,40 @@
             </ui:HandButton>
         </Grid>
 
-        <!-- Opens under the input only when the reminder button is clicked. -->
-        <Border x:Name="ReminderPicker" Grid.Row="2" Visibility="Collapsed" CornerRadius="8"
-                Background="#14FFFFFF" Padding="10,8">
-            <StackPanel Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <ui:HandButton Content="10 min" Tag="InTenMinutes" Click="OnPickPreset" Padding="10,3" FontSize="12" />
-                    <ui:HandButton Content="1 hour" Tag="InOneHour" Click="OnPickPreset" Padding="10,3" FontSize="12" />
-                    <ui:HandButton Content="Tomorrow 9:00" Tag="TomorrowMorning" Click="OnPickPreset" Padding="10,3" FontSize="12" />
-                    <ui:HandButton x:Name="PickerClear" Content="Clear" Click="OnPickClear" Padding="10,3" FontSize="12" />
+        <StackPanel Grid.Row="2" Spacing="8">
+            <!-- Search: opens with the magnifier or Ctrl+F; filters the list as you type. -->
+            <Grid x:Name="SearchBar" Visibility="Collapsed" ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="SearchBox" PlaceholderText="Search tasks, #tags, status…" MaxLength="100" MinHeight="34"
+                         VerticalContentAlignment="Center" Padding="12,6,12,0" TextChanged="OnSearchChanged" KeyDown="OnSearchKeyDown" />
+                <ui:HandButton Grid.Column="1" Click="OnSearchClose" Padding="8" BorderThickness="0" Background="Transparent"
+                               ToolTipService.ToolTip="Close search (Esc)">
+                    <FontIcon Glyph="&#xE711;" FontSize="12" />
+                </ui:HandButton>
+            </Grid>
+            <!-- Opens under the input only when the reminder button is clicked. -->
+            <Border x:Name="ReminderPicker" Visibility="Collapsed" CornerRadius="8"
+                    Background="#14FFFFFF" Padding="10,8">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ui:HandButton Content="10 min" Tag="InTenMinutes" Click="OnPickPreset" Padding="10,3" FontSize="12" />
+                        <ui:HandButton Content="1 hour" Tag="InOneHour" Click="OnPickPreset" Padding="10,3" FontSize="12" />
+                        <ui:HandButton Content="Tomorrow 9:00" Tag="TomorrowMorning" Click="OnPickPreset" Padding="10,3" FontSize="12" />
+                        <ui:HandButton x:Name="PickerClear" Content="Clear" Click="OnPickClear" Padding="10,3" FontSize="12" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TimePicker x:Name="PickerTime" />
+                        <ui:HandButton Content="Set" Click="OnPickerSet" Padding="14,5" VerticalAlignment="Center" />
+                    </StackPanel>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TimePicker x:Name="PickerTime" />
-                    <ui:HandButton Content="Set" Click="OnPickerSet" Padding="14,5" VerticalAlignment="Center" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
+            </Border>
+        </StackPanel>
 
         <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="Rows" Spacing="2" />
+            <StackPanel x:Name="Rows" Spacing="4" />
         </ScrollViewer>
 
         <!-- Only appears when an update is waiting; installing lives in Settings. -->

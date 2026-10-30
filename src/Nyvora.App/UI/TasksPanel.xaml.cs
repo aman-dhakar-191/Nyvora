@@ -25,6 +25,7 @@ public sealed partial class TasksPanel : UserControl
     {
         InitializeComponent();
         ClipboardText.Attach(Input);
+        ClipboardText.Attach(SearchBox);
     }
 
     public event Action? CollapseRequested;
@@ -112,6 +113,79 @@ public sealed partial class TasksPanel : UserControl
     }
 
     private string? _nudge;
+    private string _query = "";
+
+    private void OnSearchClick(object sender, RoutedEventArgs e)
+    {
+        if (SearchBar.Visibility == Visibility.Visible)
+        {
+            CloseSearch();
+        }
+        else
+        {
+            OpenSearch();
+        }
+    }
+
+    private void OnSearchAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        OpenSearch();
+    }
+
+    private void OpenSearch()
+    {
+        if (IsFocusing)
+        {
+            return; // the reminder card shows one task; there is no list to search
+        }
+
+        SearchBar.Visibility = Visibility.Visible;
+        SearchBox.Focus(FocusState.Programmatic);
+        SearchBox.SelectAll();
+    }
+
+    private void CloseSearch()
+    {
+        SearchBar.Visibility = Visibility.Collapsed;
+        if (SearchBox.Text.Length > 0)
+        {
+            SearchBox.Text = ""; // TextChanged clears the filter and redraws
+        }
+        else if (_query.Length > 0)
+        {
+            _query = "";
+            Refresh();
+        }
+    }
+
+    /// <summary>Back to the plain list (the pill collapsed): a leftover filter would look like missing tasks.</summary>
+    public void ResetView() => CloseSearch();
+
+    private void OnSearchChanged(object sender, TextChangedEventArgs e)
+    {
+        _query = SearchBox.Text.Trim();
+        Refresh();
+    }
+
+    private void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Escape)
+        {
+            // First Esc clears the text, the next closes the bar; either way it must not collapse the pill.
+            if (SearchBox.Text.Length > 0)
+            {
+                SearchBox.Text = "";
+            }
+            else
+            {
+                CloseSearch();
+                Input.Focus(FocusState.Programmatic);
+            }
+
+            e.Handled = true;
+        }
+    }
 
     /// <summary>Shows a banner above the task list (cleared by <see cref="ClearNudge"/> when the pill collapses).</summary>
     public void ShowNudge(string message)
@@ -187,7 +261,15 @@ public sealed partial class TasksPanel : UserControl
             });
         }
 
-        var ordered = _tasks.Ordered();
+        var filtering = TaskSearch.IsActive(_query);
+        IReadOnlyList<TaskItem> ordered = _tasks.Ordered();
+        var total = ordered.Count;
+        if (filtering)
+        {
+            ordered = ordered.Where(t => _tasks.Matches(t, _query)).ToList();
+            Summary.Text = $"{ordered.Count} of {total} tasks match";
+        }
+
         var open = ordered.Where(t => !t.Done).ToList();
         var done = ordered.Where(t => t.Done).ToList();
 
@@ -200,7 +282,8 @@ public sealed partial class TasksPanel : UserControl
         {
             Rows.Children.Add(new TextBlock
             {
-                Text = done.Count == 0 ? "Nothing here yet. Add your first task above." : "All clear. Nice work.",
+                Text = filtering && done.Count == 0 ? $"No tasks match \u201c{_query}\u201d."
+                    : done.Count == 0 ? "Nothing here yet. Add your first task above." : "All clear. Nice work.",
                 Foreground = MutedBrush,
                 FontSize = 13,
                 Margin = new Thickness(2, 10, 0, 6),
@@ -218,7 +301,7 @@ public sealed partial class TasksPanel : UserControl
                     Spacing = 6,
                     Children =
                     {
-                        new FontIcon { Glyph = _showDone ? "\uE70E" : "\uE70D", FontSize = 10, Foreground = MutedBrush },
+                        new FontIcon { Glyph = _showDone || filtering ? "\uE70E" : "\uE70D", FontSize = 10, Foreground = MutedBrush },
                         new TextBlock { Text = $"Done · {done.Count}", FontSize = 12, Foreground = MutedBrush },
                     },
                 },
@@ -236,7 +319,7 @@ public sealed partial class TasksPanel : UserControl
             };
             Rows.Children.Add(toggle);
 
-            if (_showDone)
+            if (_showDone || filtering) // while searching, finished tasks that match are shown too
             {
                 foreach (var item in done)
                 {
@@ -253,9 +336,11 @@ public sealed partial class TasksPanel : UserControl
         var isDue = TaskList.IsDue(item, now);
         // Secondary actions stay invisible (but keep their space, so nothing shifts) until the row is hovered or focused.
         var reveal = new List<UIElement>();
-        var row = new Grid { ColumnSpacing = 6, MinHeight = 36 };
+        var row = new Grid { ColumnSpacing = 6 };
+        row.RowDefinitions.Add(new RowDefinition { MinHeight = 38 });
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // tags, aligned under the title
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) }); // fixed, so every title starts at the same x
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -458,8 +543,8 @@ public sealed partial class TasksPanel : UserControl
 
         if (itemTags.Count > 0)
         {
-            // Under the title; long lists collapse into "+N" so the row never grows sideways.
-            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(30, 0, 0, 2) };
+            // Under the title (same grid, so it lines up exactly); long lists collapse into "+N".
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 0, 0, 4) };
             foreach (var tag in itemTags.Take(4))
             {
                 line.Children.Add(TagVisuals.Chip(tag));
@@ -470,7 +555,10 @@ public sealed partial class TasksPanel : UserControl
                 line.Children.Add(new TextBlock { Text = $"+{itemTags.Count - 4}", FontSize = 11, Foreground = MutedBrush, VerticalAlignment = VerticalAlignment.Center });
             }
 
-            stack.Children.Add(line);
+            Grid.SetRow(line, 1);
+            Grid.SetColumn(line, 2);
+            Grid.SetColumnSpan(line, 5);
+            row.Children.Add(line);
         }
 
         if (!item.Done && _editingReminder == item.Id)
@@ -494,11 +582,36 @@ public sealed partial class TasksPanel : UserControl
             return; // already editing (double-click can arrive through two paths)
         }
 
-        var box = new TextBox { Text = item.Title, MaxLength = TaskList.MaxTitleLength, VerticalAlignment = VerticalAlignment.Center };
+        // Wraps, so a long title is fully visible while it is edited; Enter saves, Esc cancels, clicking away saves.
+        var box = new TextBox
+        {
+            Text = item.Title,
+            MaxLength = TaskList.MaxTitleLength,
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = false,
+            MinHeight = 34,
+            Padding = new Thickness(10, 6, 10, 6),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
         ClipboardText.Attach(box);
+        var hint = new TextBlock { Text = "Enter to save · Esc to cancel", FontSize = 11, Foreground = MutedBrush };
+        var editor = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        editor.Children.Add(box);
+        editor.Children.Add(hint);
+
         row.Children.Remove(title);
-        Grid.SetColumn(box, 2);
-        row.Children.Add(box);
+        // The editor takes the title's place plus the room of the row's buttons, which are hidden while editing.
+        foreach (var el in row.Children.OfType<FrameworkElement>().ToList())
+        {
+            if (Grid.GetRow(el) == 0 && Grid.GetColumn(el) >= 3)
+            {
+                el.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        Grid.SetColumn(editor, 2);
+        Grid.SetColumnSpan(editor, 5);
+        row.Children.Add(editor);
 
         var finished = false;
         void Finish(bool save)
@@ -699,7 +812,8 @@ public sealed partial class TasksPanel : UserControl
         var color = status.IsDone ? DoneColor : OpenColors[Math.Max(0, _tasks.Statuses.IndexOf(status.Id)) % OpenColors.Length];
         var chip = new HandButton
         {
-            Content = new TextBlock { Text = status.Name, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 84 },
+            Content = new TextBlock { Text = status.Name, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 70 },
+            HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(8, 2, 8, 2),
             MinHeight = 0,
             CornerRadius = new CornerRadius(10),
@@ -708,7 +822,7 @@ public sealed partial class TasksPanel : UserControl
             BorderThickness = new Thickness(0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTipService.SetToolTip(chip, "Click to change status");
+        ToolTipService.SetToolTip(chip, $"{status.Name}: click to change status");
         chip.Click += (_, _) => _tasks.CycleStatus(item.Id);
         return chip;
     }

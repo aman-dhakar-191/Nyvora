@@ -30,6 +30,10 @@ public sealed class TaskList
         Changed?.Invoke();
     }
 
+    /// <summary>True when the task matches the search text (see <see cref="TaskSearch"/>).</summary>
+    public bool Matches(TaskItem item, string? query) =>
+        TaskSearch.Matches(query, item.Title, StatusOf(item).Name, TagsOf(item).Select(t => t.Name));
+
     public StatusSet Statuses => _statuses;
 
     public TagSet Tags => _tags;

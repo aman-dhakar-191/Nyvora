@@ -527,6 +527,7 @@ public sealed partial class MainWindow : Window
             case PillState.Resting:
                 Panel.ClearNudge();
                 Panel.ClearFocus();
+                Panel.ResetView();
                 _focusMode = false;
                 _settingsOpen = false;
                 _side = 0;

@@ -7,6 +7,7 @@
     <Grid Padding="24,18,24,14" RowSpacing="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -19,63 +20,81 @@
             </ui:HandButton>
         </Grid>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Spacing="16" Margin="0,0,12,0">
+        <!-- Jump links, so a long page never has to be scrolled to find a section. -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
+            <ui:HandButton Content="General" Tag="general" Click="OnNav" Padding="10,3" FontSize="12" />
+            <ui:HandButton Content="Tasks" Tag="tasks" Click="OnNav" Padding="10,3" FontSize="12" />
+            <ui:HandButton Content="AI agents" Tag="agents" Click="OnNav" Padding="10,3" FontSize="12" />
+            <ui:HandButton Content="Updates" Tag="updates" Click="OnNav" Padding="10,3" FontSize="12" />
+        </StackPanel>
 
-                <StackPanel Spacing="6">
-                    <TextBlock Text="General" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
-                    <ui:HandCheckBox x:Name="TopToggle" Content="Always on top" MinWidth="0" Click="OnTopClick" />
-                    <ui:HandCheckBox x:Name="StartupToggle" Content="Start Nyvora when I sign in" MinWidth="0" Click="OnStartupClick" />
-                    <ui:HandCheckBox x:Name="ReminderToggle" MinWidth="0" Click="OnReminderClick"
-                                     Content="Every hour, open Nyvora to remind me to update task statuses" />
-                </StackPanel>
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12" Margin="0,0,12,0">
 
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Updates" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="UpdateText" FontSize="13" Foreground="#FFE7E7EE" VerticalAlignment="Center"
-                                   TextWrapping="Wrap" />
-                        <ui:HandButton x:Name="UpdateButton" Grid.Column="1" Click="OnUpdateClick" />
-                    </Grid>
-                    <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Minimum="0" Maximum="100" />
-                    <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
-                               Text="Checks GitHub Releases once a day. Installing is always your click." />
-                    <ui:HandButton Content="Open log folder" Click="OnOpenLogs" HorizontalAlignment="Left" Padding="10,3" FontSize="12"
-                                   ToolTipService.ToolTip="Shows nyvora.log (what the app did) and updates\update.log (the installer)" />
-                </StackPanel>
+                <Border x:Name="SecGeneral" CornerRadius="10" Background="#0DFFFFFF" Padding="16,14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+                        <ui:HandCheckBox x:Name="TopToggle" Content="Always on top" MinWidth="0" Click="OnTopClick" />
+                        <ui:HandCheckBox x:Name="StartupToggle" Content="Start Nyvora when I sign in" MinWidth="0" Click="OnStartupClick" />
+                        <ui:HandCheckBox x:Name="ReminderToggle" MinWidth="0" Click="OnReminderClick"
+                                         Content="Every hour, open Nyvora to remind me to update task statuses" />
 
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Shortcuts" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
-                    <ui:HandButton x:Name="DesktopShortcutButton" Click="OnDesktopShortcut" HorizontalAlignment="Left" />
-                    <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
-                               Text="Taskbar: Windows does not let an app pin itself. Open the Start menu entry below, right-click Nyvora and choose Pin to taskbar (on Windows 11: Show more options first)." />
-                    <ui:HandButton Content="Show Start menu entry" Click="OnRevealStartMenu" HorizontalAlignment="Left" Padding="10,3" FontSize="12" />
-                </StackPanel>
+                        <TextBlock Text="Shortcuts" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" Margin="0,8,0,0" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ui:HandButton x:Name="DesktopShortcutButton" Click="OnDesktopShortcut" />
+                            <ui:HandButton Content="Show Start menu entry" Click="OnRevealStartMenu" />
+                        </StackPanel>
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Taskbar: Windows does not let an app pin itself. Open the Start menu entry, right-click Nyvora and choose Pin to taskbar (on Windows 11: Show more options first)." />
+                    </StackPanel>
+                </Border>
 
-                <StackPanel Spacing="6">
-                    <TextBlock Text="AI agents (MCP)" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
-                    <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
-                               Text="Let an AI app (Claude Desktop, Cursor, VS Code...) work with your tasks. It runs on this PC only. Choose what it may do, copy the config, and paste it into the app's MCP settings." />
-                    <ui:HandCheckBox x:Name="McpWrite" Content="Allow it to add and change tasks" MinWidth="0" Click="OnMcpOptionClick" />
-                    <ui:HandCheckBox x:Name="McpDelete" Content="Also allow it to delete tasks" MinWidth="0" Click="OnMcpOptionClick" IsEnabled="False" />
-                    <TextBox x:Name="McpConfig" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas"
-                             FontSize="11" MinHeight="120" />
-                    <ui:HandButton x:Name="McpCopy" Content="Copy config" Click="OnCopyMcp" HorizontalAlignment="Left" />
-                </StackPanel>
+                <Border x:Name="SecTasks" CornerRadius="10" Background="#0DFFFFFF" Padding="16,14">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="Tasks" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Tags" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
+                            <ui:TagSettingsView x:Name="TagsEditor" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Statuses" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
+                            <ui:StatusSettingsView x:Name="Statuses" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
 
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Tags" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
-                    <ui:TagSettingsView x:Name="TagsEditor" />
-                </StackPanel>
+                <Border x:Name="SecAgents" CornerRadius="10" Background="#0DFFFFFF" Padding="16,14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="AI agents (MCP)" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Let an AI app (Claude Desktop, Cursor, VS Code...) work with your tasks. It runs on this PC only. Choose what it may do, copy the config, and paste it into the app's MCP settings." />
+                        <ui:HandCheckBox x:Name="McpWrite" Content="Allow it to add and change tasks" MinWidth="0" Click="OnMcpOptionClick" />
+                        <ui:HandCheckBox x:Name="McpDelete" Content="Also allow it to delete tasks" MinWidth="0" Click="OnMcpOptionClick" IsEnabled="False" />
+                        <TextBox x:Name="McpConfig" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas"
+                                 FontSize="11" MinHeight="120" />
+                        <ui:HandButton x:Name="McpCopy" Content="Copy config" Click="OnCopyMcp" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
 
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Task statuses" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
-                    <ui:StatusSettingsView x:Name="Statuses" />
-                </StackPanel>
+                <Border x:Name="SecUpdates" CornerRadius="10" Background="#0DFFFFFF" Padding="16,14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Updates and logs" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="UpdateText" FontSize="13" Foreground="#FFE7E7EE" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                            <ui:HandButton x:Name="UpdateButton" Grid.Column="1" Click="OnUpdateClick" />
+                        </Grid>
+                        <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Minimum="0" Maximum="100" />
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Checks GitHub Releases once a day. Installing is always your click." />
+                        <ui:HandButton Content="Open log folder" Click="OnOpenLogs" HorizontalAlignment="Left" Padding="10,3" FontSize="12"
+                                       ToolTipService.ToolTip="Shows nyvora.log (what the app did) and updates\update.log (the installer)" />
+                    </StackPanel>
+                </Border>
 
             </StackPanel>
         </ScrollViewer>
