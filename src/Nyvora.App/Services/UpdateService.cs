@@ -46,6 +46,9 @@ internal sealed class UpdateService
 
     public UpdateInfo? Available { get; private set; }
 
+    /// <summary>0..1 while downloading; null when the amount is unknown (verifying, unpacking, installing).</summary>
+    public double? Progress { get; private set; }
+
     public event Action? Changed;
 
     /// <summary>Raised right after the installer helper is launched; the host must exit so files can be replaced.</summary>
@@ -129,7 +132,8 @@ internal sealed class UpdateService
         try
         {
             step = "preparing";
-            Set(UpdateState.Downloading, "Downloading…");
+            Progress = null;
+            Set(UpdateState.Downloading, "Preparing…");
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);
@@ -144,11 +148,27 @@ internal sealed class UpdateService
                 ?? throw new InvalidDataException("Checksum file is malformed.");
             step = "downloading the package";
             Log.Info($"Update {update.Tag}: {step} from {update.PackageUrl}");
-            await DownloadAsync(update.PackageUrl, zip, cts.Token);
+            var lastShown = -1;
+            await DownloadAsync(update.PackageUrl, zip, cts.Token, (got, total) =>
+            {
+                // Redraw once per percent (or per MB when the size is unknown), not once per buffer.
+                var shown = total is > 0 ? (int)(got * 100 / total.Value) : (int)(got / (1024 * 1024));
+                if (shown == lastShown)
+                {
+                    return;
+                }
+
+                lastShown = shown;
+                Progress = total is > 0 ? (double)got / total.Value : null;
+                Set(UpdateState.Downloading, total is > 0
+                    ? $"Downloading {Mb(got)} of {Mb(total.Value)} MB ({shown}%)"
+                    : $"Downloading {Mb(got)} MB");
+            });
 
             step = "verifying the download";
             Log.Info($"Update {update.Tag}: downloaded {new FileInfo(zip).Length} bytes; {step}");
-            Set(UpdateState.Installing, "Verifying…");
+            Progress = null;
+            Set(UpdateState.Installing, "Installing: verifying the download…");
             await using (var fs = File.OpenRead(zip))
             {
                 var actual = await Checksum.Sha256HexAsync(fs, cts.Token);
@@ -160,6 +180,7 @@ internal sealed class UpdateService
 
             step = "unpacking";
             Log.Info($"Update {update.Tag}: {step}");
+            Set(UpdateState.Installing, "Installing: unpacking…");
             await Task.Run(() => ZipFile.ExtractToDirectory(zip, stage), cts.Token);
             if (!File.Exists(Path.Combine(stage, "Nyvora.exe")))
             {
@@ -167,7 +188,7 @@ internal sealed class UpdateService
             }
 
             step = "starting the installer";
-            Set(UpdateState.Installing, "Restarting…");
+            Set(UpdateState.Installing, "Installing: restarting Nyvora…");
             Launch(stage, update);
             Log.Info($"Installing {update.Tag}; exiting for restart");
             RestartRequested?.Invoke();
@@ -177,6 +198,7 @@ internal sealed class UpdateService
             // Any failure, expected or not, must leave the app running and say what went wrong.
             Log.Error($"Update install failed while {step}", ex);
             TryDelete(root);
+            Progress = null;
             Set(UpdateState.Available, $"Update failed while {step}: {Explain(ex)}");
         }
     }
@@ -228,7 +250,9 @@ internal sealed class UpdateService
         Process.Start(psi)?.Dispose();
     }
 
-    private static async Task DownloadAsync(Uri url, string path, CancellationToken ct)
+    private static string Mb(long bytes) => (bytes / 1048576.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static async Task DownloadAsync(Uri url, string path, CancellationToken ct, Action<long, long?> onProgress)
     {
         using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
@@ -251,6 +275,7 @@ internal sealed class UpdateService
             }
 
             await output.WriteAsync(buffer.AsMemory(0, read), ct);
+            onProgress(total, response.Content.Headers.ContentLength);
         }
     }
 

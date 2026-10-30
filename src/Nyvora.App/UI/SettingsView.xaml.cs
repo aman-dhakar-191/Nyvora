@@ -118,6 +118,14 @@ public sealed partial class SettingsView : UserControl
         var busy = u.State is UpdateState.Checking or UpdateState.Downloading or UpdateState.Installing;
         var installable = u.State == UpdateState.Available && u.Available is not null;
 
+        // A real bar while downloading (we know the size); a moving one for the steps after it.
+        UpdateProgress.Visibility = u.State is UpdateState.Downloading or UpdateState.Installing ? Visibility.Visible : Visibility.Collapsed;
+        UpdateProgress.IsIndeterminate = u.Progress is null;
+        if (u.Progress is { } p)
+        {
+            UpdateProgress.Value = p * 100;
+        }
+
         UpdateButton.IsEnabled = !busy && (!installable || u.CanInstall);
         UpdateButton.Content = installable
             ? (u.CanInstall ? "Install and restart" : "Update available")
