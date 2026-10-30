@@ -123,7 +123,7 @@ public sealed partial class SettingsView : UserControl
 
     private void OnNav(object sender, RoutedEventArgs e)
     {
-        FrameworkElement target = (sender as FrameworkElement)?.Tag as string switch
+        FrameworkElement target = ((sender as FrameworkElement)?.Tag as string) switch
         {
             "general" => SecGeneral,
             "tasks" => SecTasks,
