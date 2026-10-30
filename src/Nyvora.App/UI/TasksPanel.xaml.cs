@@ -848,8 +848,10 @@ public sealed partial class TasksPanel : UserControl
         var color = status.IsDone ? DoneColor : OpenColors[Math.Max(0, _tasks.Statuses.IndexOf(status.Id)) % OpenColors.Length];
         var chip = new HandButton
         {
-            Content = new TextBlock { Text = status.Name, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 70 },
-            HorizontalAlignment = HorizontalAlignment.Left,
+            // Every chip fills the same fixed column, so the pills line up as a neat column and short names leave no gap.
+            Content = new TextBlock { Text = status.Name, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center },
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
             Padding = new Thickness(8, 2, 8, 2),
             MinHeight = 0,
             CornerRadius = new CornerRadius(10),

@@ -40,9 +40,9 @@
                                          Content="Every hour, open Nyvora to remind me to update task statuses" />
 
                         <TextBlock Text="Shortcuts" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" Margin="0,8,0,0" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ui:HandButton x:Name="DesktopShortcutButton" Click="OnDesktopShortcut" />
-                            <ui:HandButton Content="Show Start menu entry" Click="OnRevealStartMenu" />
+                        <StackPanel Spacing="6">
+                            <ui:HandButton x:Name="DesktopShortcutButton" Click="OnDesktopShortcut" HorizontalAlignment="Left" />
+                            <ui:HandButton Content="Show Start menu entry" Click="OnRevealStartMenu" HorizontalAlignment="Left" />
                         </StackPanel>
                         <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
                                    Text="Taskbar: Windows does not let an app pin itself. Open the Start menu entry, right-click Nyvora and choose Pin to taskbar (on Windows 11: Show more options first)." />
