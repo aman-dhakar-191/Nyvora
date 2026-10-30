@@ -420,7 +420,7 @@ public sealed partial class TasksPanel : UserControl
         var row = new Grid { ColumnSpacing = 6 };
         // Compact: the title gets the whole width and the quiet controls move to their own line below it.
         var meta = _compact ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 } : null;
-        void Place(UIElement el, int column)
+        void Place(FrameworkElement el, int column)
         {
             if (meta is not null)
             {
