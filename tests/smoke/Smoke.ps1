@@ -41,7 +41,7 @@ $scale = [Win]::GetDpiForSystem() / 96.0
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $results = New-Object System.Collections.Generic.List[object]
 $logPath = Join-Path $env:LOCALAPPDATA 'Nyvora\nyvora.log'
-$tasksPath = Join-Path $env:LOCALAPPDATA 'Nyvora\tasks.json'
+$tasksPath = Join-Path $env:APPDATA 'Nyvora\tasks.json'   # user data lives in Roaming; the log stays in Local
 
 function Check([bool]$ok, [string]$what, [string]$detail = '') {
   $results.Add([pscustomobject]@{ ok = $ok; check = $what; detail = $detail })
