@@ -787,7 +787,8 @@ public sealed partial class MainWindow : Window
         Side.IsHitTestVisible = _settingsOpen && side > 0.9;
 
         // The grip resizes around the pill's center, which no longer holds while the side panel is out.
-        Grip.Opacity = Panel.Opacity * (1 - side);
-        Grip.IsHitTestVisible = _machine.State is PillState.Expanded && !_focusMode && !_settingsOpen && side == 0;
+        // Compact has a fixed size, so it shows no grip (a grip that cannot drag would only mislead).
+        Grip.Opacity = _compact ? 0 : Panel.Opacity * (1 - side);
+        Grip.IsHitTestVisible = !_compact && _machine.State is PillState.Expanded && !_focusMode && !_settingsOpen && side == 0;
     }
 }
