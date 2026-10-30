@@ -74,16 +74,18 @@ jobs:
 
       - name: Build the installer
         shell: pwsh
+        env:
+          NYVORA_VERSION: ${{ env.VERSION }}
         run: |
           choco install innosetup --no-progress -y | Out-Host
           $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' }
-          & $iscc "/DAppVersion=%s" "/DSourceDir=$PWD\artifacts\Nyvora-win-x64" "/O$PWD\artifacts\installer" installer\Nyvora.iss
+          & $iscc "/DSourceDir=$PWD\artifacts\Nyvora-win-x64" "/O$PWD\artifacts\installer" installer\Nyvora.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
 
       - name: Test the installer (silent install, MCP from the install, silent uninstall)
         shell: pwsh
-        run: ./tests/installer/Test-Installer.ps1 -Setup (Get-ChildItem artifacts/installer/*.exe | Select-Object -First 1).FullName
+        run: ./tests/installer/Test-Installer.ps1 -ExpectedVersion ${{ env.VERSION }} -Setup (Get-ChildItem artifacts/installer/*.exe | Select-Object -First 1).FullName
 
       - name: Zip and checksum
         shell: pwsh

@@ -1,10 +1,14 @@
 ; Inno Setup script for Nyvora. Per-user install (no admin): program files in %LOCALAPPDATA%\Programs\Nyvora,
 ; user data stays in %APPDATA%\Nyvora (Roaming) and is never touched by install or uninstall.
-; Build:  ISCC.exe /DAppVersion=1.2.3 /DSourceDir=<published folder> /O<output folder> installer\Nyvora.iss
+; Build:  set NYVORA_VERSION=1.2.3, then ISCC.exe /DSourceDir=<published folder> /O<output folder> installer\Nyvora.iss
 ; Self-updates replace files in {app} in place, so the version shown in Windows' installed-apps list is the
 ; version that was installed, not the version after self-updates.
 
-#ifndef AppVersion
+; The version arrives as an environment variable, i.e. as text. (A command-line /DAppVersion=1.2.0 is parsed by the
+; preprocessor as an expression and comes out garbled.)
+#define AppVersion GetEnv("NYVORA_VERSION")
+#if AppVersion == ""
+  #undef AppVersion
   #define AppVersion "0.0.0"
 #endif
 #ifndef SourceDir

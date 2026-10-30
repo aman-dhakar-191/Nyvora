@@ -193,7 +193,8 @@ if (Test-Path $logPath) {
   Write-Host '--- nyvora.log (this run) ---'
   $lines | ForEach-Object { Write-Host $_ }
   Write-Host '--- end ---'
-  $errors = @($lines | Where-Object { $_ -match ' ERROR ' })
+  # A rate-limited GitHub API answer to the update check says nothing about the app, so it does not count.
+  $errors = @($lines | Where-Object { $_ -match ' ERROR ' -and $_ -notmatch 'rate limit' })
   Check ($errors.Count -eq 0) 'no errors in the app log' ($errors -join ' | ')
 }
 $results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutDir 'results.json')
