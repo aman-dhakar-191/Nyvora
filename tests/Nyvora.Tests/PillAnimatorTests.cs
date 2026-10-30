@@ -53,3 +53,47 @@ public class PillAnimatorTests
             () => new PillAnimator(PillAnimator.RestingSize, PillAnimator.DefaultExpandedSize, TimeSpan.Zero));
     }
 }
+
+public class PillEaseTests
+{
+    private static readonly SizeD From = PillAnimator.DefaultExpandedSize;
+    private static readonly SizeD To = PillAnimator.RestingSize;
+    private static readonly TimeSpan Dur = TimeSpan.FromMilliseconds(240);
+
+    [Fact]
+    public void InOutStartsAndEndsExactly()
+    {
+        var a = new PillAnimator(From, To, Dur, PillEase.InOutCubic);
+        Assert.Equal(From, a.Sample(TimeSpan.Zero));
+        Assert.Equal(To, a.Sample(Dur));
+    }
+
+    [Fact]
+    public void InOutNeverOvershootsAndShrinksMonotonically()
+    {
+        var a = new PillAnimator(From, To, Dur, PillEase.InOutCubic);
+        var last = double.MaxValue;
+        for (var ms = 0; ms <= 240; ms += 8)
+        {
+            var w = a.Sample(TimeSpan.FromMilliseconds(ms)).Width;
+            Assert.InRange(w, To.Width - 1e-9, From.Width + 1e-9);
+            Assert.True(w <= last + 1e-9);
+            last = w;
+        }
+    }
+
+    [Fact]
+    public void InOutIsSlowerThanOutAtTheStart()
+    {
+        var inOut = new PillAnimator(From, To, Dur, PillEase.InOutCubic).Sample(TimeSpan.FromMilliseconds(30)).Width;
+        var outC = new PillAnimator(From, To, Dur).Sample(TimeSpan.FromMilliseconds(30)).Width;
+        Assert.True(inOut > outC); // still wider = hasn't moved as far
+    }
+
+    [Fact]
+    public void CompactIsSmallerThanTheNormalMinimum()
+    {
+        Assert.True(PillAnimator.CompactSize.Width < ExpandedSizing.Min.Width);
+        Assert.True(PillAnimator.CompactSize.Width > PillAnimator.RestingSize.Width);
+    }
+}

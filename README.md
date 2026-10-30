@@ -72,6 +72,19 @@ Download `Nyvora-Setup-vX.Y.Z-x64.exe` from the latest release and run it. It in
 - Your data, in Roaming: `%APPDATA%\Nyvora\tasks.json` and `settings.json`. Install, update and uninstall never touch them. Versions before this one kept them in `%LOCALAPPDATA%\Nyvora`; on first start they are **copied** to Roaming (never moved or deleted: the old files stay as a backup, and if the copy fails Nyvora keeps using the old folder so nothing disappears). Close all running Nyvora copies before updating, because an old copy keeps writing to the old folder.
 - Disposable and machine-specific files, in Local: `%LOCALAPPDATA%\Nyvora\nyvora.log`, `updates\` and `rollback\`.
 
+## Keyboard
+
+| Keys | Does |
+|---|---|
+| Ctrl+Alt+N | From any app: open Nyvora with the cursor in the add box (Settings → General turns it off; it stays off if another app already owns the combination) |
+| Ctrl+N | Jump to the add box (leaves search) |
+| Ctrl+F | Search |
+| Ctrl+M | Compact layout (a narrow list; fixed size, so the resize grip is off) |
+| Ctrl+Z | Bring back the task you just deleted (not while typing in a box, where it undoes typing) |
+| Esc | Cancel an edit, close search, or collapse |
+
+Closing animates ease-in/ease-out; with Windows animations turned off, the pill changes size instantly.
+
 ## Shortcuts and single instance
 
 Settings → Shortcuts adds or removes a **desktop shortcut**. Windows does not let apps pin themselves to the **taskbar**, so the section links to the Start menu entry (created at every launch) where you can right-click Nyvora and choose Pin to taskbar. Only one copy runs at a time: starting Nyvora again (a shortcut, launch at sign-in, a manual start) opens the running pill instead of creating a second one.

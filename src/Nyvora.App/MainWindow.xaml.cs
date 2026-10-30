@@ -51,7 +51,13 @@ public sealed partial class MainWindow : Window
     private bool _focusMode; // a reminder card is showing instead of the list
     private static readonly SizeD FocusSize = new(380, 200);
 
-    private SizeD ExpandedTarget => _focusMode ? FocusSize : _expandedSize;
+    private bool _compact;
+    private readonly Windows.UI.ViewManagement.UISettings _ui = new();
+
+    /// <summary>The list's size: the saved (resizable) size, or the fixed narrow one in compact mode.</summary>
+    private SizeD LayoutSize => _compact ? PillAnimator.CompactSize : _expandedSize;
+
+    private SizeD ExpandedTarget => _focusMode ? FocusSize : LayoutSize;
     private int _frames;
     private bool _focusInputWhenOpen;
 
@@ -104,6 +110,18 @@ public sealed partial class MainWindow : Window
             _settings.Save();
             _statusNudge.SetInterval(TimeSpan.FromMinutes(minutes), DateTimeOffset.Now);
         };
+        _compact = _settings.Current.CompactMode;
+        ApplyPanelSize();
+        Side.SetLayoutOptions(_compact, _settings.Current.GlobalHotkey);
+        Side.CompactChanged += SetCompact;
+        Side.HotkeyChanged += on =>
+        {
+            _settings.Current.GlobalHotkey = on;
+            _settings.Save();
+            ApplyHotkey();
+        };
+        _host.HotkeyPressed += OnHotkey;
+        ApplyHotkey();
         Side.AlwaysOnTopChanged += on =>
         {
             _host.SetAlwaysOnTop(on);
@@ -122,7 +140,7 @@ public sealed partial class MainWindow : Window
         {
             _focusMode = false;
             ApplyPanelSize();
-            Start(_expandedSize, PillAnimator.SideDuration); // grow from the card to the full list
+            Start(LayoutSize, PillAnimator.SideDuration); // grow from the card to the full list
             _host.Focus();
             Panel.FocusInput();
         };
@@ -381,14 +399,14 @@ public sealed partial class MainWindow : Window
         Panel.Width = ExpandedTarget.Width;
         Panel.Height = ExpandedTarget.Height;
         Side.Width = _sideWidth;
-        Side.Height = _expandedSize.Height;
-        Side.Margin = new Thickness(_expandedSize.Width, 0, 0, 0);
-        SideDivider.Margin = new Thickness(_expandedSize.Width, 14, 0, 14);
+        Side.Height = LayoutSize.Height;
+        Side.Margin = new Thickness(LayoutSize.Width, 0, 0, 0);
+        SideDivider.Margin = new Thickness(LayoutSize.Width, 14, 0, 14);
     }
 
     private void OnGripPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (_machine.State != PillState.Expanded || !NativeMethods.GetCursorPos(out _resizeStartCursor))
+        if (_compact || _machine.State != PillState.Expanded || !NativeMethods.GetCursorPos(out _resizeStartCursor))
         {
             return;
         }
@@ -469,6 +487,82 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void ApplyHotkey()
+    {
+        var ok = _host.SetHotkey(_settings.Current.GlobalHotkey);
+        Log.Info(_settings.Current.GlobalHotkey
+            ? (ok ? "Global shortcut Ctrl+Alt+N registered" : "Global shortcut Ctrl+Alt+N is taken by another app")
+            : "Global shortcut off");
+    }
+
+    private void OnHotkey()
+    {
+        if (_focusMode)
+        {
+            return; // a reminder card is showing; don't replace it with the list
+        }
+
+        if (_machine.State == PillState.Expanded)
+        {
+            _host.Focus();
+            Panel.ShowAddInput();
+        }
+        else if (_machine.State is PillState.Resting or PillState.Collapsing)
+        {
+            _focusInputWhenOpen = true;
+            _machine.RequestExpand();
+        }
+    }
+
+    private void SetCompact(bool on)
+    {
+        if (_compact == on)
+        {
+            return;
+        }
+
+        _compact = on;
+        _settings.Current.CompactMode = on;
+        _settings.Save();
+        Side.SetLayoutOptions(on, _settings.Current.GlobalHotkey);
+        Log.Info(on ? "Compact layout on" : "Compact layout off");
+        if (_machine.State == PillState.Expanded && !_focusMode)
+        {
+            _sideWidth = ExpandedSizing.SideWidth(LayoutSize, _host.AvailableSizeDip);
+            ApplyPanelSize();
+            Start(ExpandedTarget, PillAnimator.SideDuration);
+        }
+    }
+
+    private void OnCompactAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (_machine.State == PillState.Expanded)
+        {
+            SetCompact(!_compact);
+            args.Handled = true;
+        }
+    }
+
+    private void OnNewTaskAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (_machine.State == PillState.Expanded && !_focusMode)
+        {
+            Panel.ShowAddInput();
+            args.Handled = true;
+        }
+    }
+
+    private void OnUndoAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // In a text box Ctrl+Z undoes typing; only elsewhere does it bring a deleted task back.
+        if (FocusManager.GetFocusedElement(Root.XamlRoot) is Microsoft.UI.Xaml.Controls.TextBox)
+        {
+            return;
+        }
+
+        args.Handled = Panel.Undo();
+    }
+
     private void OnEscape(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = Collapse("Esc");
@@ -541,7 +635,14 @@ public sealed partial class MainWindow : Window
     private void Start(SizeD target, TimeSpan duration)
     {
         // Begin from the on-screen size so reversing mid-animation is continuous.
-        _animator = new PillAnimator(_current, target, duration);
+        // Closing eases in and out so it doesn't snap shut; with Windows animations off the change is instant.
+        var ease = target == PillAnimator.RestingSize ? PillEase.InOutCubic : PillEase.OutCubic;
+        if (!_ui.AnimationsEnabled)
+        {
+            duration = TimeSpan.FromMilliseconds(1);
+        }
+
+        _animator = new PillAnimator(_current, target, duration, ease);
         _frames = 0;
         _clock.Restart();
         StartFrames();
@@ -559,7 +660,7 @@ public sealed partial class MainWindow : Window
         _settingsOpen = !_settingsOpen;
         if (_settingsOpen)
         {
-            _sideWidth = ExpandedSizing.SideWidth(_expandedSize, _host.AvailableSizeDip);
+            _sideWidth = ExpandedSizing.SideWidth(LayoutSize, _host.AvailableSizeDip);
             ApplyPanelSize();
         }
 
@@ -571,7 +672,8 @@ public sealed partial class MainWindow : Window
 
     private void StartSide(double target)
     {
-        _sideAnimator = new PillAnimator(new SizeD(_side, 0), new SizeD(target, 0), PillAnimator.SideDuration);
+        var sideDuration = _ui.AnimationsEnabled ? PillAnimator.SideDuration : TimeSpan.FromMilliseconds(1);
+        _sideAnimator = new PillAnimator(new SizeD(_side, 0), new SizeD(target, 0), sideDuration);
         _sideClock.Restart();
         StartFrames();
     }

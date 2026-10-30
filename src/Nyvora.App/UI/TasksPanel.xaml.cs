@@ -247,6 +247,29 @@ public sealed partial class TasksPanel : UserControl
 
     public void FocusInput() => Input.Focus(FocusState.Programmatic);
 
+    /// <summary>Ctrl+N: leave search (which hides the input) and put the cursor in the add box.</summary>
+    public void ShowAddInput()
+    {
+        CloseSearch();
+        FocusInput();
+    }
+
+    private readonly Stack<(TaskItem Item, int Index)> _deleted = new();
+
+    /// <summary>Ctrl+Z: brings back the most recently deleted task, in its old place.</summary>
+    public bool Undo()
+    {
+        while (_deleted.TryPop(out var last))
+        {
+            if (_tasks.Restore(last.Item, last.Index))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void Refresh()
     {
         if (_focusQueue.Count > 0)
@@ -557,7 +580,14 @@ public sealed partial class TasksPanel : UserControl
             BorderThickness = new Thickness(0),
         };
         ToolTipService.SetToolTip(delete, "Delete task");
-        delete.Click += (_, _) => _tasks.Remove(item.Id);
+        delete.Click += (_, _) =>
+        {
+            var index = _tasks.IndexOf(item.Id);
+            if (_tasks.Remove(item.Id))
+            {
+                _deleted.Push((item, index));
+            }
+        };
 
         // Double-click edits too, but a visible pencil is the dependable way in.
         var edit = new HandButton

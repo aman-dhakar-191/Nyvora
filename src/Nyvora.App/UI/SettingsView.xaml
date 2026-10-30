@@ -35,6 +35,8 @@
                     <StackPanel Spacing="8">
                         <TextBlock Text="General" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
                         <ui:HandCheckBox x:Name="TopToggle" Content="Always on top" MinWidth="0" Click="OnTopClick" />
+                        <ui:HandCheckBox x:Name="CompactToggle" Content="Compact layout (Ctrl+M)" MinWidth="0" Click="OnCompactClick" />
+                        <ui:HandCheckBox x:Name="HotkeyToggle" Content="Ctrl+Alt+N opens Nyvora from any app" MinWidth="0" Click="OnHotkeyClick" />
                         <ui:HandCheckBox x:Name="StartupToggle" Content="Start Nyvora when I sign in" MinWidth="0" Click="OnStartupClick" />
                         <ui:HandCheckBox x:Name="ReminderToggle" MinWidth="0" Click="OnReminderClick"
                                          Content="Every hour, open Nyvora to remind me to update task statuses" />

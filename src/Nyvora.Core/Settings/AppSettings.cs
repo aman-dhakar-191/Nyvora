@@ -27,6 +27,12 @@ public sealed class AppSettings
 
     public double ExpandedHeight { get; set; }
 
+    /// <summary>Narrow layout for keeping the list beside other work (Ctrl+M).</summary>
+    public bool CompactMode { get; set; }
+
+    /// <summary>Ctrl+Alt+N opens Nyvora ready to type from any app. Off if another app already owns the combination.</summary>
+    public bool GlobalHotkey { get; set; } = true;
+
     /// <summary>User-defined tags (name and color). Validated by <see cref="TagSet"/>.</summary>
     public List<TagDef> Tags { get; set; } = new();
 

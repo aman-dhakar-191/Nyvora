@@ -171,8 +171,38 @@ internal sealed class PillWindowHost : IDisposable
         SetWindowRgn(_hwnd, CreateRoundRectRgn(0, 0, w + 1, h + 1, radius * 2, radius * 2), true);
     }
 
+    private const int HotkeyId = 1;
+    private bool _hotkeyOn;
+
+    /// <summary>Raised when Ctrl+Alt+N is pressed anywhere in Windows.</summary>
+    public event Action? HotkeyPressed;
+
+    /// <summary>Registers or releases Ctrl+Alt+N; false when another app already owns the combination.</summary>
+    public bool SetHotkey(bool on)
+    {
+        if (on == _hotkeyOn)
+        {
+            return true;
+        }
+
+        if (!on)
+        {
+            UnregisterHotKey(_hwnd, HotkeyId);
+            _hotkeyOn = false;
+            return true;
+        }
+
+        _hotkeyOn = RegisterHotKey(_hwnd, HotkeyId, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x4E);
+        return _hotkeyOn;
+    }
+
     private nint OnMessage(nint hWnd, uint msg, nint wParam, nint lParam, nuint id, nuint refData)
     {
+        if (msg == WM_HOTKEY && wParam == HotkeyId)
+        {
+            _window.DispatcherQueue.TryEnqueue(() => HotkeyPressed?.Invoke());
+        }
+
         if (msg is WM_DPICHANGED or WM_DISPLAYCHANGE or WM_SETTINGCHANGE)
         {
             // Re-run placement against the (possibly new) primary display and DPI.
@@ -188,6 +218,7 @@ internal sealed class PillWindowHost : IDisposable
 
     public void Dispose()
     {
+        SetHotkey(false);
         RemoveWindowSubclass(_hwnd, _subclass, 1);
         Log.Info("Window host disposed");
     }

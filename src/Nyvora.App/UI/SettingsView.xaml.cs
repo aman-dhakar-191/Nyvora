@@ -16,7 +16,17 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? AlwaysOnTopChanged;
 
+    public event Action<bool>? CompactChanged;
+
+    public event Action<bool>? HotkeyChanged;
+
     public event Action<bool>? StatusReminderChanged;
+
+    internal void SetLayoutOptions(bool compact, bool hotkey)
+    {
+        CompactToggle.IsChecked = compact;
+        HotkeyToggle.IsChecked = hotkey;
+    }
 
     public event Action<bool>? LaunchAtSignInChanged;
 
@@ -136,6 +146,10 @@ public sealed partial class SettingsView : UserControl
     private void OnClose(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     private void OnTopClick(object sender, RoutedEventArgs e) => AlwaysOnTopChanged?.Invoke(TopToggle.IsChecked == true);
+
+    private void OnCompactClick(object sender, RoutedEventArgs e) => CompactChanged?.Invoke(CompactToggle.IsChecked == true);
+
+    private void OnHotkeyClick(object sender, RoutedEventArgs e) => HotkeyChanged?.Invoke(HotkeyToggle.IsChecked == true);
 
     private void OnStartupClick(object sender, RoutedEventArgs e) =>
         LaunchAtSignInChanged?.Invoke(StartupToggle.IsChecked == true);

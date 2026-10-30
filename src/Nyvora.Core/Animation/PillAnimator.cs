@@ -2,6 +2,15 @@ namespace Nyvora.Core.Animation;
 
 public readonly record struct SizeD(double Width, double Height);
 
+public enum PillEase
+{
+    /// <summary>Fast start, soft landing: opening feels immediate.</summary>
+    OutCubic,
+
+    /// <summary>Soft start and landing: closing doesn't snap shut.</summary>
+    InOutCubic,
+}
+
 /// <summary>
 /// Pure size interpolation for one pill animation. Starting from the *current* size makes
 /// interruptions continuous: reversing mid-flight never jumps.
@@ -11,6 +20,9 @@ public sealed class PillAnimator
     public static readonly SizeD RestingSize = new(148, 36);
     public static readonly SizeD DefaultExpandedSize = new(420, 400);
 
+    /// <summary>The narrow layout (Ctrl+M): small enough to park beside other work.</summary>
+    public static readonly SizeD CompactSize = new(340, 300);
+
     public static readonly TimeSpan ExpandDuration = TimeSpan.FromMilliseconds(320);
     public static readonly TimeSpan SideDuration = TimeSpan.FromMilliseconds(280);
 
@@ -19,8 +31,9 @@ public sealed class PillAnimator
     private readonly SizeD _from;
     private readonly SizeD _to;
     private readonly TimeSpan _duration;
+    private readonly PillEase _ease;
 
-    public PillAnimator(SizeD from, SizeD to, TimeSpan duration)
+    public PillAnimator(SizeD from, SizeD to, TimeSpan duration, PillEase ease = PillEase.OutCubic)
     {
         if (duration <= TimeSpan.Zero)
         {
@@ -30,6 +43,7 @@ public sealed class PillAnimator
         _from = from;
         _to = to;
         _duration = duration;
+        _ease = ease;
     }
 
     public SizeD Target => _to;
@@ -39,7 +53,7 @@ public sealed class PillAnimator
     public SizeD Sample(TimeSpan elapsed)
     {
         var t = Math.Clamp(elapsed / _duration, 0.0, 1.0);
-        var e = EaseOutCubic(t);
+        var e = _ease == PillEase.InOutCubic ? EaseInOutCubic(t) : EaseOutCubic(t);
         return new SizeD(Lerp(_from.Width, _to.Width, e), Lerp(_from.Height, _to.Height, e));
     }
 
@@ -49,6 +63,8 @@ public sealed class PillAnimator
         var range = expanded.Width - RestingSize.Width;
         return Math.Clamp((size.Width - RestingSize.Width) / range, 0.0, 1.0);
     }
+
+    public static double EaseInOutCubic(double t) => t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
 
     public static double EaseOutCubic(double t) => 1 - Math.Pow(1 - t, 3);
 

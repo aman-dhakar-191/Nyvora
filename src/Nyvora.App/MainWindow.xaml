@@ -7,6 +7,9 @@
     <Grid x:Name="Root" Background="#FF0B0B10" RequestedTheme="Dark">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="Escape" Invoked="OnEscape" />
+            <KeyboardAccelerator Key="M" Modifiers="Control" Invoked="OnCompactAccelerator" />
+            <KeyboardAccelerator Key="N" Modifiers="Control" Invoked="OnNewTaskAccelerator" />
+            <KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="OnUndoAccelerator" />
         </Grid.KeyboardAccelerators>
         <Grid.ContextFlyout>
             <MenuFlyout>
