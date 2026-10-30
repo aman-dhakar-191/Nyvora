@@ -22,8 +22,13 @@ function Log([string]$m) {
 
 function Copy-Tree([string]$from, [string]$to, [string]$flags) {
   $a = @($from, $to) + ($flags -split ' ') + @('/R:5', '/W:1', '/NFL', '/NDL', '/NP', '/NJH', '/NJS')
-  & robocopy @a | Out-Null
-  return $LASTEXITCODE
+  $out = & robocopy @a
+  $code = $LASTEXITCODE
+  if ($code -ge 8) {
+    # Keep the reason (a locked file, access denied...) so a failed update can be diagnosed from update.log.
+    @($out | Where-Object { $_ -match 'ERROR|denied|being used|cannot' } | Select-Object -First 8) | ForEach-Object { Log ('robocopy: ' + ([string]$_).Trim()) }
+  }
+  return $code
 }
 
 function Start-App {
