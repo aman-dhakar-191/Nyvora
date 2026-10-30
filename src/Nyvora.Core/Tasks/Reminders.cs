@@ -45,16 +45,10 @@ public static class Reminders
         return true;
     }
 
-    /// <summary>Parses a time of day ("14:30", "9", "2:30 pm", "12am", "noon") without any date.</summary>
+    /// <summary>Parses a time of day ("14:30", "9", "2:30 pm", "12am") without any date. Words are not times here.</summary>
     public static bool TryParseTimeOfDay(string? text, out TimeSpan time)
     {
         time = default;
-        if (string.Equals(text?.Trim(), "noon", StringComparison.OrdinalIgnoreCase))
-        {
-            time = TimeSpan.FromHours(12);
-            return true;
-        }
-
         var m = text is null ? null : Clock.Match(text);
         if (m is null || !m.Success)
         {

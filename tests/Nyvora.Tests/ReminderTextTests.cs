@@ -82,6 +82,7 @@ public sealed class ReminderTextTests
         Assert.Equal(At(2026, 10, 31, 9), Parse("9am"));          // 9am has passed today
         Assert.Equal(At(2026, 10, 30, 12, 0).AddDays(1), Parse("12"));
         Assert.Equal(At(2026, 10, 31, 12), Parse("noon"));
+        Assert.Equal(At(2026, 11, 2, 12), Parse("mon noon"));
     }
 
     [Theory]
@@ -112,8 +113,7 @@ public sealed class ReminderTextTests
     {
         Assert.True(Reminders.TryParseTimeOfDay("2:30 pm", out var t));
         Assert.Equal(new TimeSpan(14, 30, 0), t);
-        Assert.True(Reminders.TryParseTimeOfDay("noon", out t));
-        Assert.Equal(TimeSpan.FromHours(12), t);
+        Assert.False(Reminders.TryParseTimeOfDay("noon", out _)); // words are only understood by ReminderText
         Assert.False(Reminders.TryParseTimeOfDay("13pm", out _));
     }
 }

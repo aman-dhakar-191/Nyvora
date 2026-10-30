@@ -107,7 +107,27 @@ public static class ReminderText
             }
         }
 
-        return Reminders.TryParseClock(s, now, out at);
+        // A bare time of day: its next occurrence.
+        if (TryTime(s, out var bare))
+        {
+            var candidate = new DateTimeOffset(now.Date.Add(bare), now.Offset);
+            at = candidate > now ? candidate : candidate.AddDays(1);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>A time of day as typed here: the strict clock formats plus the word "noon".</summary>
+    private static bool TryTime(string text, out TimeSpan time)
+    {
+        if (text.Trim() == "noon")
+        {
+            time = TimeSpan.FromHours(12);
+            return true;
+        }
+
+        return Reminders.TryParseTimeOfDay(text, out time);
     }
 
     private enum Roll
@@ -142,7 +162,7 @@ public static class ReminderText
         TimeSpan time;
         if (timeText.Success && timeText.Value.Length > 0)
         {
-            if (!Reminders.TryParseTimeOfDay(timeText.Value, out time))
+            if (!TryTime(timeText.Value, out time))
             {
                 return false;
             }
