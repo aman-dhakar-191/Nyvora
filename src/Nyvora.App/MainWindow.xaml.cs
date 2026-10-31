@@ -91,7 +91,7 @@ public sealed partial class MainWindow : Window
             _tasks.ApplyStatuses(); // moves tasks out of removed statuses and re-syncs "done"
         };
         _tasks.Changed += OnTasksChanged;
-        _updates.Changed += UpdateBadge;
+        _updates.Changed += OnUpdateChanged;
         _updates.RestartRequested += Close;
         Panel.Attach(_tasks, _updates, _statuses, _tags);
         Panel.SettingsRequested += ToggleSettings;
@@ -350,6 +350,9 @@ public sealed partial class MainWindow : Window
             {
                 _reloading = false;
             }
+
+            _syncNote = ProcessStatus.Synced(DateTimeOffset.Now);
+            UpdateBadge();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -418,7 +421,9 @@ public sealed partial class MainWindow : Window
         var counts = PillLabel.For(due, _tasks.OpenCount);
 
         // A temporary message ("/notch ..." or an agent) takes the notch's place while it lasts; due and open come back after.
-        if (_notch is { } note && note.IsActive(now))
+        // Nyvora's own progress (an update, a sync) comes first while it lasts, then a message someone set.
+        var note = new[] { _updateNote, _syncNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
+        if (note is not null)
         {
             RestingLabel.Text = note.Text;
             RestingLabel.Foreground = note.Tone == NotchTone.Info ? LabelBrush : ToneBrush(note.Tone);
@@ -503,6 +508,23 @@ public sealed partial class MainWindow : Window
 
     private static readonly string NotchPath = Path.Combine(DataFolders.Active(), NotchMessageStore.FileName);
     private NotchMessage? _notch;
+
+    // Nyvora's own progress on the notch. Never saved; each one clears itself or when its process ends.
+    private NotchMessage? _updateNote;
+    private NotchMessage? _syncNote;
+
+    private void OnUpdateChanged()
+    {
+        var now = DateTimeOffset.Now;
+        var version = _updates.Available is { } a ? $"v{a.Version.Major}.{a.Version.Minor}.{a.Version.Build}" : "update";
+        _updateNote = _updates.State switch
+        {
+            UpdateState.Downloading or UpdateState.Installing => ProcessStatus.Updating(version, _updates.Progress, _updates.Message),
+            UpdateState.Failed => _updateNote is { ExpiresAt: not null } ? _updateNote : ProcessStatus.UpdateFailed(now), // keep the original 20 s clock
+            _ => null,
+        };
+        UpdateBadge();
+    }
     private FileSystemWatcher? _notchWatcher;
     private DispatcherQueueTimer? _notchReload;
     private DispatcherQueueTimer? _notchExpiry;
@@ -545,13 +567,32 @@ public sealed partial class MainWindow : Window
         }
 
         _notchExpiry = queue.CreateTimer();
-        _notchExpiry.Interval = TimeSpan.FromSeconds(15);
+        _notchExpiry.Interval = TimeSpan.FromSeconds(1);
         _notchExpiry.IsRepeating = true;
         _notchExpiry.Tick += (_, _) =>
         {
-            if (_notch is { } n && !n.IsActive(DateTimeOffset.Now))
+            var now = DateTimeOffset.Now;
+            var changed = false;
+            if (_notch is { } n && !n.IsActive(now))
             {
                 _notch = null;
+                changed = true;
+            }
+
+            if (_syncNote is { } s && !s.IsActive(now))
+            {
+                _syncNote = null;
+                changed = true;
+            }
+
+            if (_updateNote is { } u && !u.IsActive(now))
+            {
+                _updateNote = null;
+                changed = true;
+            }
+
+            if (changed)
+            {
                 UpdateBadge();
             }
         };
@@ -572,8 +613,8 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                var (tone, text) = NotchMessage.SplitTone(payload);
-                var error = NotchMessage.TryCreate(text, tone, null, DateTimeOffset.Now, out var message);
+                var (tone, minutes, text) = NotchMessage.ParseCommandText(payload);
+                var error = NotchMessage.TryCreate(text, tone, minutes, DateTimeOffset.Now, out var message);
                 if (error is not null)
                 {
                     Panel.ShowNudge(error);
@@ -582,7 +623,7 @@ public sealed partial class MainWindow : Window
 
                 NotchMessageStore.Save(NotchPath, message!);
                 _notch = message;
-                Log.Info($"Notch message set: {message!.Text}");
+                Log.Info($"Notch message set: {message!.Text}{(message.ExpiresAt is { } until ? $" (until {until:t})" : "")}");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

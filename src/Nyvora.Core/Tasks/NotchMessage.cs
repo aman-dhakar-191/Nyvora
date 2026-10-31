@@ -103,6 +103,40 @@ public sealed class NotchMessage
         return true;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex DurationToken =
+        new(@"^(\d{1,4})\s*([mh])(?=\s|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static readonly System.Text.RegularExpressions.Regex ToneToken =
+        new(@"^(info|ok|success|warn|warning|err|error)\s*:\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Reads what follows "/notch": up to two leading options, in either order, then the text.
+    /// <c>30m</c> or <c>2h</c> is how long the message stays; <c>warn:</c> (or ok:, error:, info:) is its tone.
+    /// "30m warn: Server down", "warn: 30m Server down" and "Server down" all work.
+    /// </summary>
+    public static (string? Tone, int? Minutes, string Text) ParseCommandText(string payload)
+    {
+        string? tone = null;
+        int? minutes = null;
+        var rest = payload.Trim();
+        for (var i = 0; i < 2; i++)
+        {
+            if (minutes is null && DurationToken.Match(rest) is { Success: true } d)
+            {
+                var n = int.Parse(d.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                minutes = d.Groups[2].Value.Equals("h", StringComparison.OrdinalIgnoreCase) ? n * 60 : n;
+                rest = rest[d.Length..].TrimStart();
+            }
+            else if (tone is null && ToneToken.Match(rest) is { Success: true } t)
+            {
+                tone = t.Groups[1].Value;
+                rest = rest[t.Length..].TrimStart();
+            }
+        }
+
+        return (tone, minutes, rest);
+    }
+
     /// <summary>Splits an optional leading "tone:" off command text: "warn: server down" becomes (warn, server down).</summary>
     public static (string? Tone, string Text) SplitTone(string payload)
     {
