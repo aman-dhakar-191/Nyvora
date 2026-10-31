@@ -295,6 +295,21 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void NotchMessagesCanLastSeconds()
+    {
+        var s = Server(write: true);
+        var set = Payload(ToolCall(s, "set_notch_message", new { text = "Quick", seconds = 30 }));
+        Assert.Equal("Quick", (string)set["message"]!);
+        Assert.Equal(Now.AddSeconds(30), NotchMessageStore.Load(Path.Combine(_dir, "notch.json"), Now)!.ExpiresAt);
+
+        // Seconds win over minutes; out-of-range values are errors.
+        ToolCall(s, "set_notch_message", new { text = "Both", seconds = 20, minutes = 10 });
+        Assert.Equal(Now.AddSeconds(20), NotchMessageStore.Load(Path.Combine(_dir, "notch.json"), Now)!.ExpiresAt);
+        Assert.True(IsError(ToolCall(s, "set_notch_message", new { text = "x", seconds = 2 })));
+        Assert.True(IsError(ToolCall(s, "set_notch_message", new { text = "x", seconds = 90000 })));
+    }
+
+    [Fact]
     public void BadNotchMessagesAreToolErrors()
     {
         var s = Server(write: true);

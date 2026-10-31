@@ -20,6 +20,11 @@ public sealed class NotchMessage
     public const int MaxLength = 40;
     public const int MaxMinutes = 24 * 60;
 
+    /// <summary>Shorter than this would flash by; longer than a day is a message someone forgot.</summary>
+    public static readonly TimeSpan MinDuration = TimeSpan.FromSeconds(5);
+
+    public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(24);
+
     public string Text { get; set; } = "";
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -29,8 +34,20 @@ public sealed class NotchMessage
 
     public bool IsActive(DateTimeOffset now) => Text.Length > 0 && (ExpiresAt is null || ExpiresAt > now);
 
-    /// <summary>Builds a message; null on success, otherwise what is wrong with the input.</summary>
+    /// <summary>Builds a message that lasts <paramref name="minutes"/> (or until cleared); null on success, otherwise what is wrong.</summary>
     public static string? TryCreate(string? text, string? tone, int? minutes, DateTimeOffset now, out NotchMessage? message)
+    {
+        if (minutes is { } m && (m < 1 || m > MaxMinutes))
+        {
+            message = null;
+            return $"minutes must be between 1 and {MaxMinutes}.";
+        }
+
+        return TryCreateTimed(text, tone, minutes is { } mm ? TimeSpan.FromMinutes(mm) : null, now, out message);
+    }
+
+    /// <summary>Like <see cref="TryCreate"/> but with any lasting time from 5 seconds to 24 hours (null: until cleared).</summary>
+    public static string? TryCreateTimed(string? text, string? tone, TimeSpan? duration, DateTimeOffset now, out NotchMessage? message)
     {
         message = null;
         var t = (text ?? "").Trim();
@@ -49,16 +66,16 @@ public sealed class NotchMessage
             return "tone must be info, success, warning or error.";
         }
 
-        if (minutes is { } m && (m < 1 || m > MaxMinutes))
+        if (duration is { } d && (d < MinDuration || d > MaxDuration))
         {
-            return $"minutes must be between 1 and {MaxMinutes}.";
+            return "The timer can be 5 seconds to 24 hours.";
         }
 
         message = new NotchMessage
         {
             Text = t,
             Tone = parsedTone,
-            ExpiresAt = minutes is { } mm ? now.AddMinutes(mm) : null,
+            ExpiresAt = duration is { } dd ? now + dd : null,
         };
         return null;
     }
@@ -104,27 +121,32 @@ public sealed class NotchMessage
     }
 
     private static readonly System.Text.RegularExpressions.Regex DurationToken =
-        new(@"^(\d{1,4})\s*([mh])(?=\s|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        new(@"^(\d{1,5})\s*([smh])(?=\s|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static readonly System.Text.RegularExpressions.Regex ToneToken =
         new(@"^(info|ok|success|warn|warning|err|error)\s*:\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Reads what follows "/notch": up to two leading options, in either order, then the text.
-    /// <c>30m</c> or <c>2h</c> is how long the message stays; <c>warn:</c> (or ok:, error:, info:) is its tone.
+    /// <c>30s</c>, <c>30m</c> or <c>2h</c> is how long the message stays; <c>warn:</c> (or ok:, error:, info:) is its tone.
     /// "30m warn: Server down", "warn: 30m Server down" and "Server down" all work.
     /// </summary>
-    public static (string? Tone, int? Minutes, string Text) ParseCommandText(string payload)
+    public static (string? Tone, TimeSpan? Duration, string Text) ParseCommandText(string payload)
     {
         string? tone = null;
-        int? minutes = null;
+        TimeSpan? duration = null;
         var rest = payload.Trim();
         for (var i = 0; i < 2; i++)
         {
-            if (minutes is null && DurationToken.Match(rest) is { Success: true } d)
+            if (duration is null && DurationToken.Match(rest) is { Success: true } d)
             {
                 var n = int.Parse(d.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
-                minutes = d.Groups[2].Value.Equals("h", StringComparison.OrdinalIgnoreCase) ? n * 60 : n;
+                duration = char.ToLowerInvariant(d.Groups[2].Value[0]) switch
+                {
+                    's' => TimeSpan.FromSeconds(n),
+                    'h' => TimeSpan.FromHours(n),
+                    _ => TimeSpan.FromMinutes(n),
+                };
                 rest = rest[d.Length..].TrimStart();
             }
             else if (tone is null && ToneToken.Match(rest) is { Success: true } t)
@@ -134,7 +156,7 @@ public sealed class NotchMessage
             }
         }
 
-        return (tone, minutes, rest);
+        return (tone, duration, rest);
     }
 
     /// <summary>Splits an optional leading "tone:" off command text: "warn: server down" becomes (warn, server down).</summary>

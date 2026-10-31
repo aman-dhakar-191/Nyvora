@@ -27,17 +27,17 @@ public class NotchSuggestionTests
     [Fact]
     public void AfterTheCommandItOffersEveryTimerAndTone()
     {
-        Assert.Equal(new[] { "15m", "30m", "1h", "2h", "ok:", "warn:", "error:", "info:" }, Inserts("/notch "));
+        Assert.Equal(new[] { "10s", "30s", "15m", "30m", "1h", "2h", "ok:", "warn:", "error:", "info:" }, Inserts("/notch "));
         Assert.Contains("clears", NotchSuggestions.For("/notch ").Hint);
     }
 
     [Fact]
     public void NarrowsByWhatHasBeenTyped()
     {
-        Assert.Equal(new[] { "30m" }, Inserts("/notch 3"));
-        Assert.Equal(new[] { "30m" }, Inserts("/notch 30"));
+        Assert.Equal(new[] { "30s", "30m" }, Inserts("/notch 3"));
+        Assert.Equal(new[] { "30s", "30m" }, Inserts("/notch 30"));
         Assert.Equal(new[] { "warn:" }, Inserts("/notch wa"));
-        Assert.Equal(new[] { "15m", "1h" }, Inserts("/notch 1"));
+        Assert.Equal(new[] { "10s", "15m", "1h" }, Inserts("/notch 1"));
         Assert.Equal(new[] { "error:" }, Inserts("/notch E"));
     }
 
@@ -45,7 +45,7 @@ public class NotchSuggestionTests
     public void OffersOnlyWhatIsNotUsedYet()
     {
         Assert.Equal(new[] { "ok:", "warn:", "error:", "info:" }, Inserts("/notch 30m "));
-        Assert.Equal(new[] { "15m", "30m", "1h", "2h" }, Inserts("/notch warn: "));
+        Assert.Equal(new[] { "10s", "30s", "15m", "30m", "1h", "2h" }, Inserts("/notch warn: "));
         Assert.Empty(Inserts("/notch 30m warn: "));
         Assert.Empty(Inserts("/notch warn: 30m "));
     }
@@ -66,7 +66,8 @@ public class NotchSuggestionTests
         Assert.Equal("/notch ", set.Apply(set.Items[0]));
 
         set = NotchSuggestions.For("/notch 3");
-        Assert.Equal("/notch 30m ", set.Apply(set.Items[0]));
+        Assert.Equal("/notch 30s ", set.Apply(set.Items[0]));
+        Assert.Equal("/notch 30m ", set.Apply(set.Items[1]));
 
         set = NotchSuggestions.For("/notch 30m wa");
         Assert.Equal("/notch 30m warn: ", set.Apply(set.Items[0]));
@@ -80,10 +81,17 @@ public class NotchSuggestionTests
         text = Pick(text, "30m");
         text = Pick(text, "warn:");
         Assert.Equal("/notch 30m warn: ", text);
-        var (tone, minutes, rest) = NotchMessage.ParseCommandText(text["/notch".Length..] + "Server down");
+        var (tone, duration, rest) = NotchMessage.ParseCommandText(text["/notch".Length..] + "Server down");
         Assert.Equal("warn", tone);
-        Assert.Equal(30, minutes);
+        Assert.Equal(TimeSpan.FromMinutes(30), duration);
         Assert.Equal("Server down", rest);
+    }
+
+    [Fact]
+    public void SecondsAreSuggestedAndRecognisedAsATimer()
+    {
+        Assert.Equal(new[] { "ok:", "warn:", "error:", "info:" }, Inserts("/notch 30s ")); // 30s counts as the timer
+        Assert.Empty(Inserts("/notch 30s warn: "));
     }
 
     [Fact]

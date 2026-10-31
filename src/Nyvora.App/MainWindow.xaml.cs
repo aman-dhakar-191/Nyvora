@@ -613,8 +613,8 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                var (tone, minutes, text) = NotchMessage.ParseCommandText(payload);
-                var error = NotchMessage.TryCreate(text, tone, minutes, DateTimeOffset.Now, out var message);
+                var (tone, duration, text) = NotchMessage.ParseCommandText(payload);
+                var error = NotchMessage.TryCreateTimed(text, tone, duration, DateTimeOffset.Now, out var message);
                 if (error is not null)
                 {
                     Panel.ShowNudge(error);

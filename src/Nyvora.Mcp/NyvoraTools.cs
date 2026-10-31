@@ -176,11 +176,15 @@ public sealed class NyvoraTools
             ToolAccess.Write,
             Schema(("text", Str($"The message, up to {NotchMessage.MaxLength} characters")),
                 ("tone", Str("Optional colour: info (default), success, warning or error")),
-                ("minutes", Int($"Optional: remove the message by itself after this many minutes (1 to {NotchMessage.MaxMinutes}); omit to keep it until cleared"))).Require("text"),
+                ("minutes", Int($"Optional: remove the message by itself after this many minutes (1 to {NotchMessage.MaxMinutes}); omit to keep it until cleared")),
+                ("seconds", Int("Optional: like minutes but in seconds (5 to 86400), for a short message; wins over minutes if both are given"))).Require("text"),
             (a, _, now) =>
             {
                 int? minutes = a["minutes"] is JsonNode n && n.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int)n : null;
-                var error = NotchMessage.TryCreate(RequireStr(a, "text"), OptionalStr(a, "tone"), minutes, now, out var message);
+                int? seconds = a["seconds"] is JsonNode sn && sn.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int)sn : null;
+                var error = seconds is { } sec
+                    ? NotchMessage.TryCreateTimed(RequireStr(a, "text"), OptionalStr(a, "tone"), TimeSpan.FromSeconds(sec), now, out var message)
+                    : NotchMessage.TryCreate(RequireStr(a, "text"), OptionalStr(a, "tone"), minutes, now, out message);
                 if (error is not null)
                 {
                     throw new ToolError(error);

@@ -5,27 +5,32 @@ namespace Nyvora.Tests;
 
 public class NotchCommandTests
 {
-    private static (string?, int?, string) T(string? tone, int? minutes, string text) => (tone, minutes, text);
-
     private static readonly DateTimeOffset Now = new(2026, 3, 10, 12, 0, 0, TimeSpan.FromHours(2));
+
+    private static (string?, TimeSpan?, string) T(string? tone, int? seconds, string text) =>
+        (tone, seconds is { } s ? TimeSpan.FromSeconds(s) : null, text);
 
     [Theory]
     [InlineData("Deploying", null, null, "Deploying")]
-    [InlineData("30m Focus time", null, 30, "Focus time")]
-    [InlineData("2h Focus time", null, 120, "Focus time")]
-    [InlineData("30M focus", null, 30, "focus")]
+    [InlineData("30m Focus time", null, 1800, "Focus time")]
+    [InlineData("2h Focus time", null, 7200, "Focus time")]
+    [InlineData("30M focus", null, 1800, "focus")]
+    [InlineData("30s Quick look", null, 30, "Quick look")]
+    [InlineData("10S go", null, 10, "go")]
     [InlineData("warn: Server down", "warn", null, "Server down")]
-    [InlineData("30m warn: Server down", "warn", 30, "Server down")]
-    [InlineData("warn: 30m Server down", "warn", 30, "Server down")]
+    [InlineData("30m warn: Server down", "warn", 1800, "Server down")]
+    [InlineData("warn: 30s Server down", "warn", 30, "Server down")]
     [InlineData("ok:done", "ok", null, "done")]
-    [InlineData("  45m   error :  Disk full ", "error", 45, "Disk full")]
-    public void ReadsDurationAndToneInEitherOrder(string payload, string? tone, int? minutes, string text) =>
-        Assert.Equal(T(tone, minutes, text), NotchMessage.ParseCommandText(payload));
+    [InlineData("  45m   error :  Disk full ", "error", 2700, "Disk full")]
+    public void ReadsDurationAndToneInEitherOrder(string payload, string? tone, int? seconds, string text) =>
+        Assert.Equal(T(tone, seconds, text), NotchMessage.ParseCommandText(payload));
 
     [Theory]
     [InlineData("meeting at 10:30", "meeting at 10:30")]       // a colon that is not a tone
     [InlineData("30 minutes of focus", "30 minutes of focus")] // a number that is not a timer token
     [InlineData("30mins left", "30mins left")]                 // "30m" must be a whole word
+    [InlineData("30 seconds left", "30 seconds left")]
+    [InlineData("5sec left", "5sec left")]
     [InlineData("purple: nope", "purple: nope")]
     [InlineData("deploy 30m", "deploy 30m")]                   // options only count at the start
     public void LeavesOrdinaryTextAlone(string payload, string text) =>
@@ -34,34 +39,48 @@ public class NotchCommandTests
     [Fact]
     public void OnlyOneTimerAndOneToneAreTaken()
     {
-        Assert.Equal(T(null, 30, "10m left"), NotchMessage.ParseCommandText("30m 10m left"));
+        Assert.Equal(T(null, 1800, "10m left"), NotchMessage.ParseCommandText("30m 10m left"));
         Assert.Equal(T("warn", null, "ok: fine"), NotchMessage.ParseCommandText("warn: ok: fine"));
     }
 
     [Fact]
     public void ATimerWithoutTextIsAnErrorNotAClear()
     {
-        var (tone, minutes, text) = NotchMessage.ParseCommandText("30m");
-        Assert.Equal(T(null, 30, ""), T(tone, minutes, text));
-        Assert.NotNull(NotchMessage.TryCreate(text, tone, minutes, Now, out _));
+        var (tone, duration, text) = NotchMessage.ParseCommandText("30m");
+        Assert.Equal(T(null, 1800, ""), (tone, duration, text));
+        Assert.NotNull(NotchMessage.TryCreateTimed(text, tone, duration, Now, out _));
     }
 
-    [Fact]
-    public void TheTimerSetsTheExpiry()
+    [Theory]
+    [InlineData("90m ok: Build running", 5400)]
+    [InlineData("30s ok: Build running", 30)]
+    [InlineData("5s ok: Build running", 5)]
+    public void TheTimerSetsTheExpiry(string payload, int seconds)
     {
-        var (tone, minutes, text) = NotchMessage.ParseCommandText("90m ok: Build running");
-        Assert.Null(NotchMessage.TryCreate(text, tone, minutes, Now, out var m));
+        var (tone, duration, text) = NotchMessage.ParseCommandText(payload);
+        Assert.Null(NotchMessage.TryCreateTimed(text, tone, duration, Now, out var m));
         Assert.Equal(NotchTone.Success, m!.Tone);
-        Assert.Equal(Now.AddMinutes(90), m.ExpiresAt);
+        Assert.Equal(Now.AddSeconds(seconds), m.ExpiresAt);
+    }
+
+    [Theory]
+    [InlineData("25h Too long")]
+    [InlineData("4s Too short")]
+    [InlineData("1s Too short")]
+    public void ATimerOutsideFiveSecondsToADayIsRefused(string payload)
+    {
+        var (tone, duration, text) = NotchMessage.ParseCommandText(payload);
+        var error = NotchMessage.TryCreateTimed(text, tone, duration, Now, out var m);
+        Assert.Contains("5 seconds to 24 hours", error);
+        Assert.Null(m);
     }
 
     [Fact]
-    public void ATimerOverADayIsRefused()
+    public void SecondsExpireOnTime()
     {
-        var (tone, minutes, text) = NotchMessage.ParseCommandText("25h Too long");
-        Assert.Equal(1500, minutes);
-        Assert.NotNull(NotchMessage.TryCreate(text, tone, minutes, Now, out var m));
-        Assert.Null(m);
+        Assert.Null(NotchMessage.TryCreateTimed("Quick", null, TimeSpan.FromSeconds(30), Now, out var m));
+        Assert.True(m!.IsActive(Now.AddSeconds(29)));
+        Assert.False(m.IsActive(Now.AddSeconds(30)));
     }
 }
 

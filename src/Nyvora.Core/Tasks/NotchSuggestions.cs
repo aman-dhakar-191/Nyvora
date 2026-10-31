@@ -41,6 +41,8 @@ public static class NotchSuggestions
 {
     private static readonly NotchSuggestion[] Durations =
     {
+        new("10s", "10 seconds"),
+        new("30s", "30 seconds"),
         new("15m", "15 minutes"),
         new("30m", "30 minutes"),
         new("1h", "1 hour"),
@@ -55,7 +57,7 @@ public static class NotchSuggestions
         new("info:", "teal (default)"),
     };
 
-    private static readonly Regex DurationToken = new(@"^\d{1,4}\s*[mh](?=\s|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex DurationToken = new(@"^\d{1,5}\s*[smh](?=\s|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex ToneToken = new(@"^(info|ok|success|warn|warning|err|error)\s*:\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static NotchSuggestionSet For(string? input)
