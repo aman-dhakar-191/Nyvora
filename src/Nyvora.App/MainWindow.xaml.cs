@@ -170,6 +170,7 @@ public sealed partial class MainWindow : Window
         var queue = DispatcherQueue.GetForCurrentThread();
         WatchTasksFile(queue);
         WatchNotch(queue);
+        WatchSettingsTags(queue);
         Panel.NotchRequested += OnNotchCommand;
         _awayTimer = queue.CreateTimer();
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
@@ -451,6 +452,51 @@ public sealed partial class MainWindow : Window
             Start(_restingSize, PillAnimator.SideDuration);
         }
         // In any other state the next collapse (or the arrival at Resting) ends at the new width.
+    }
+
+    // ----- tags edited by another program -----
+
+    private FileSystemWatcher? _settingsWatcher;
+    private DispatcherQueueTimer? _settingsReload;
+
+    /// <summary>
+    /// The MCP server can create tags, which live in settings.json. Picks that up while the app runs, so the tag shows
+    /// at once and the app's next settings save does not write its old tag list over the new one.
+    /// </summary>
+    private void WatchSettingsTags(DispatcherQueue queue)
+    {
+        try
+        {
+            _settingsReload = queue.CreateTimer();
+            _settingsReload.Interval = TimeSpan.FromMilliseconds(400);
+            _settingsReload.IsRepeating = false;
+            _settingsReload.Tick += (_, _) =>
+            {
+                // A file that does not parse is left alone: better to keep our tags than to treat it as "no tags".
+                if (AppSettings.TryRead(SettingsStore.FilePath, out var fresh) && _tags.Reload(fresh.Tags))
+                {
+                    Log.Info("Tags changed by another program; reloaded");
+                }
+            };
+
+            _settingsWatcher = new FileSystemWatcher(Path.GetDirectoryName(SettingsStore.FilePath)!, "settings.json")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+            };
+            void Poke(object? sender, EventArgs e) => queue.TryEnqueue(() =>
+            {
+                _settingsReload?.Stop();
+                _settingsReload?.Start();
+            });
+            _settingsWatcher.Changed += Poke;
+            _settingsWatcher.Created += Poke;
+            _settingsWatcher.Renamed += Poke;
+            _settingsWatcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not watch settings.json; tags made by other programs will show after a restart", ex);
+        }
     }
 
     // ----- notch message -----

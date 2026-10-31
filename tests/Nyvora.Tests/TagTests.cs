@@ -196,3 +196,52 @@ public class TaskTagTests
         Assert.Single(list.Items);
     }
 }
+
+public class TagReloadTests
+{
+    private static List<TagDef> Defs(params (string id, string name, int color)[] t) =>
+        t.Select(x => new TagDef { Id = x.id, Name = x.name, Color = x.color }).ToList();
+
+    [Fact]
+    public void ReloadAdoptsNewTagsAndRaisesChangedOnce()
+    {
+        var tags = new TagSet(Defs(("a", "Work", 0)));
+        var raised = 0;
+        tags.Changed += () => raised++;
+
+        Assert.True(tags.Reload(Defs(("a", "Work", 0), ("b", "Home", 1))));
+        Assert.Equal(new[] { "Work", "Home" }, tags.Items.Select(t => t.Name));
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public void ReloadOfTheSameTagsDoesNothing()
+    {
+        var tags = new TagSet(Defs(("a", "Work", 0), ("b", "Home", 1)));
+        var raised = 0;
+        tags.Changed += () => raised++;
+
+        Assert.False(tags.Reload(Defs(("a", "Work", 0), ("b", "Home", 1))));
+        Assert.Equal(0, raised); // this is what stops the save -> watch -> reload loop
+    }
+
+    [Fact]
+    public void ReloadNoticesRenamesRecolorsAndRemovals()
+    {
+        var tags = new TagSet(Defs(("a", "Work", 0), ("b", "Home", 1)));
+        Assert.True(tags.Reload(Defs(("a", "Office", 0), ("b", "Home", 1))));
+        Assert.True(tags.Reload(Defs(("a", "Office", 3), ("b", "Home", 1))));
+        Assert.True(tags.Reload(Defs(("a", "Office", 3))));
+        Assert.Single(tags.Items);
+    }
+
+    [Fact]
+    public void ReloadRepairsStoredDataLikeTheConstructor()
+    {
+        var tags = new TagSet();
+        Assert.True(tags.Reload(Defs(("a", "  #Work ", 8), ("b", "work", 1), ("c", "", 0))));
+        Assert.Single(tags.Items); // duplicate and blank dropped
+        Assert.Equal("Work", tags.Items[0].Name);
+        Assert.InRange(tags.Items[0].Color, 0, TagSet.PaletteSize - 1);
+    }
+}

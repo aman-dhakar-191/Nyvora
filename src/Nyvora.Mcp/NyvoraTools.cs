@@ -24,6 +24,11 @@ public sealed class NyvoraTools
     private sealed class State
     {
         public required TaskList Tasks { get; init; }
+
+        public required AppSettings Settings { get; init; }
+
+        /// <summary>Set when a tool created a tag: the tag list lives in settings.json, so the server saves it there.</summary>
+        public bool TagsChanged { get; set; }
     }
 
     private sealed record Tool(string Name, string Description, ToolAccess Access, JsonObject Schema, Func<JsonObject, State, DateTimeOffset, string> Run);
@@ -110,6 +115,13 @@ public sealed class NyvoraTools
                 new JsonTaskStore(_tasksPath).Save(state.Tasks.Items);
             }
 
+            if (state.TagsChanged)
+            {
+                // Only the tag list changes; every other setting stays as it was read a moment ago.
+                state.Settings.Tags = state.Tasks.Tags.Export();
+                state.Settings.Save(_settingsPath);
+            }
+
             return new ToolResult(text, false);
         }
         catch (ToolError ex)
@@ -130,7 +142,7 @@ public sealed class NyvoraTools
         var statuses = new StatusSet(settings.Statuses);
         var tags = new TagSet(settings.Tags);
         var items = new JsonTaskStore(_tasksPath).Load();
-        return new State { Tasks = new TaskList(items, statuses, tags) };
+        return new State { Tasks = new TaskList(items, statuses, tags), Settings = settings };
     }
 
     // ----- tool table -----
@@ -259,14 +271,25 @@ public sealed class NyvoraTools
 
                 return Describe(item, s, now);
             }),
-        new Tool("tag_task", "Add (or with on=false remove) an existing tag on a task. Tags are created in Nyvora's settings; see list_tags.", ToolAccess.Write,
-            Schema(("id", Str("Task id")), ("tag", Str("Tag name")), ("on", Bool("true to add (default), false to remove"))).Require("id", "tag"),
+        new Tool("create_tag", "Create a tag (see list_tags for the ones that exist). Names are up to 20 characters, unique ignoring case, at most 30 tags. Nyvora shows it right away.", ToolAccess.Write,
+            Schema(("name", Str("Tag name"))).Require("name"),
+            (a, s, _) =>
+            {
+                var existing = FindTag(s, RequireStr(a, "name"));
+                var tag = existing is null
+                    ? CreateTag(s, RequireStr(a, "name"))
+                    : throw new ToolError($"The tag '{existing.Name}' already exists.");
+                return Json(new JsonObject { ["tag"] = tag.Name, ["tags"] = TagNames(s) });
+            }),
+        new Tool("tag_task", "Add (or with on=false remove) a tag on a task. The tag must exist (see list_tags, or create_tag); pass create=true to make it in the same call.", ToolAccess.Write,
+            Schema(("id", Str("Task id")), ("tag", Str("Tag name")), ("on", Bool("true to add (default), false to remove")), ("create", Bool("true to create the tag first if it does not exist (default false)"))).Require("id", "tag"),
             (a, s, now) =>
             {
                 var item = Find(a, s);
                 var name = RequireStr(a, "tag");
-                var tag = s.Tasks.Tags.Items.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ToolError($"No tag '{name}'. Existing tags: {(s.Tasks.Tags.Items.Count == 0 ? "(none)" : string.Join(", ", s.Tasks.Tags.Items.Select(x => x.Name)))}.");
+                var create = a["create"] is JsonNode c && c.GetValueKind() == System.Text.Json.JsonValueKind.True;
+                var tag = FindTag(s, name)
+                    ?? (create ? CreateTag(s, name) : throw new ToolError($"No tag '{name}'. Existing tags: {(s.Tasks.Tags.Items.Count == 0 ? "(none)" : string.Join(", ", s.Tasks.Tags.Items.Select(x => x.Name)))}. Use create_tag, or pass create=true."));
                 var want = !(a["on"] is JsonNode on && on.GetValueKind() == System.Text.Json.JsonValueKind.False);
                 if (item.TagIds.Contains(tag.Id) != want)
                 {
@@ -344,6 +367,18 @@ public sealed class NyvoraTools
     };
 
     private static string Json(JsonObject o) => o.ToJsonString();
+
+    private static TagDef? FindTag(State s, string name) =>
+        s.Tasks.Tags.Items.FirstOrDefault(x => string.Equals(x.Name, name.Trim().TrimStart('#').Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private static JsonArray TagNames(State s) => new(s.Tasks.Tags.Items.Select(x => (JsonNode)JsonValue.Create(x.Name)!).ToArray());
+
+    private static TagDef CreateTag(State s, string name)
+    {
+        var tag = s.Tasks.Tags.TryAdd(name, out var error) ?? throw new ToolError(error ?? "Could not create the tag.");
+        s.TagsChanged = true;
+        return tag;
+    }
 
     private static TaskItem Find(JsonObject a, State s)
     {

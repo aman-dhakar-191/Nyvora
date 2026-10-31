@@ -206,6 +206,75 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void AgentsCanCreateTagsAndTheyArePersistedInSettings()
+    {
+        // Other settings must survive the tag being written.
+        new AppSettings { AlwaysOnTop = false, StatusReminderMinutes = 15 }.Save(Path.Combine(_dir, "settings.json"));
+        var s = Server(write: true);
+        var id = (string)Payload(ToolCall(s, "add_task", new { title = "t" }))["id"]!;
+
+        var created = Payload(ToolCall(s, "create_tag", new { name = "#Urgent" }));
+        Assert.Equal("Urgent", (string)created["tag"]!);
+        Assert.Equal("Urgent", (string)Payload(ToolCall(s, "list_tags"))["tags"]![0]!);
+
+        var saved = AppSettings.Load(Path.Combine(_dir, "settings.json"));
+        Assert.Equal("Urgent", saved.Tags.Single().Name);
+        Assert.False(saved.AlwaysOnTop);
+        Assert.Equal(15, saved.StatusReminderMinutes);
+
+        var tagged = Payload(ToolCall(s, "tag_task", new { id, tag = "urgent" }));
+        Assert.Equal("Urgent", (string)tagged["tags"]![0]!);
+    }
+
+    [Fact]
+    public void CreatingATagThatExistsOrIsInvalidIsAToolError()
+    {
+        var s = Server(write: true);
+        Assert.False(IsError(ToolCall(s, "create_tag", new { name = "Work" })));
+        Assert.True(IsError(ToolCall(s, "create_tag", new { name = "work" }))); // same name, ignoring case
+        Assert.True(IsError(ToolCall(s, "create_tag", new { name = "" })));
+        Assert.True(IsError(ToolCall(s, "create_tag", new { name = new string('x', 21) })));
+        Assert.True(IsError(ToolCall(s, "create_tag")));
+        Assert.Single(AppSettings.Load(Path.Combine(_dir, "settings.json")).Tags); // failures wrote nothing extra
+    }
+
+    [Fact]
+    public void TagTaskCanCreateTheTagInOneCall()
+    {
+        var s = Server(write: true);
+        var id = (string)Payload(ToolCall(s, "add_task", new { title = "t" }))["id"]!;
+
+        var refused = ToolCall(s, "tag_task", new { id, tag = "Later" });
+        Assert.True(IsError(refused));
+        Assert.Contains("create_tag", Text(refused)); // the error says how to fix it
+        Assert.Empty(AppSettings.Load(Path.Combine(_dir, "settings.json")).Tags);
+
+        var done = Payload(ToolCall(s, "tag_task", new { id, tag = "Later", create = true }));
+        Assert.Equal("Later", (string)done["tags"]![0]!);
+        Assert.Equal("Later", AppSettings.Load(Path.Combine(_dir, "settings.json")).Tags.Single().Name);
+    }
+
+    [Fact]
+    public void TheTagLimitIsEnforcedForAgents()
+    {
+        var s = Server(write: true);
+        for (var i = 0; i < TagSet.MaxTags; i++)
+        {
+            Assert.False(IsError(ToolCall(s, "create_tag", new { name = "t" + i })));
+        }
+
+        Assert.True(IsError(ToolCall(s, "create_tag", new { name = "one-too-many" })));
+        Assert.Equal(TagSet.MaxTags, AppSettings.Load(Path.Combine(_dir, "settings.json")).Tags.Count);
+    }
+
+    [Fact]
+    public void ReadOnlyServersCannotCreateTags()
+    {
+        Assert.DoesNotContain("create_tag", ToolNames(Server()));
+        Assert.True(IsError(ToolCall(Server(), "create_tag", new { name = "x" })));
+    }
+
+    [Fact]
     public void NotchMessagesCanBeSetReadAndCleared()
     {
         var s = Server(write: true);

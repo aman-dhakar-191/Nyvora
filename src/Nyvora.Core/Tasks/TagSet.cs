@@ -64,6 +64,24 @@ public sealed class TagSet
     public List<TagDef> Export() =>
         _items.Select(t => new TagDef { Id = t.Id, Name = t.Name, Color = t.Color }).ToList();
 
+    /// <summary>
+    /// Replaces the tags with a freshly read list (another program, such as the MCP server, edited settings.json).
+    /// Returns true, and raises <see cref="Changed"/> once, only when something actually differs.
+    /// </summary>
+    public bool Reload(IEnumerable<TagDef>? defs)
+    {
+        var fresh = new TagSet(defs)._items;
+        if (fresh.Count == _items.Count && fresh.Zip(_items).All(p => p.First.Id == p.Second.Id && p.First.Name == p.Second.Name && p.First.Color == p.Second.Color))
+        {
+            return false;
+        }
+
+        _items.Clear();
+        _items.AddRange(fresh);
+        Changed?.Invoke();
+        return true;
+    }
+
     /// <summary>Creates a tag with the next palette color. Returns null and sets <paramref name="error"/> on failure.</summary>
     public TagDef? TryAdd(string name, out string? error)
     {

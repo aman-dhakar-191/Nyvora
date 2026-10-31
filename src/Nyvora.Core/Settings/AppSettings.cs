@@ -59,6 +59,30 @@ public sealed class AppSettings
         }
     }
 
+    /// <summary>
+    /// Reads the file only if it holds valid settings. Unlike <see cref="Load"/> it never falls back to defaults, so a
+    /// half-edited file cannot be mistaken for "no tags, default statuses" by code that reloads while the app runs.
+    /// </summary>
+    public static bool TryRead(string path, out AppSettings settings)
+    {
+        settings = new AppSettings();
+        try
+        {
+            var read = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) : null;
+            if (read is null)
+            {
+                return false;
+            }
+
+            settings = read;
+            return true;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public void Save(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
