@@ -37,11 +37,13 @@ internal sealed class PillWindowHost : IDisposable
             p.IsResizable = false;
             p.IsMaximizable = false;
             p.IsMinimizable = false;
+            p.SetBorderAndTitleBar(false, false);
             // Topmost keeps the pill above normal windows. Exclusive-fullscreen apps and games
             // are not affected by this flag (documented limitation).
             p.IsAlwaysOnTop = alwaysOnTop;
-            p.SetBorderAndTitleBar(false, false);
         }
+
+        _alwaysOnTop = alwaysOnTop;
 
         // WS_POPUP drops caption/frame (and the minimum tracking size that comes with them);
         // WS_EX_TOOLWINDOW hides the taskbar button and Alt+Tab entry.
@@ -56,13 +58,26 @@ internal sealed class PillWindowHost : IDisposable
         SetWindowSubclass(_hwnd, _subclass, 1, 0);
     }
 
+    private bool _alwaysOnTop;
+
     public void SetAlwaysOnTop(bool value)
     {
+        _alwaysOnTop = value;
         if (_appWindow.Presenter is OverlappedPresenter p)
         {
             p.IsAlwaysOnTop = value;
         }
+
+        ApplyZOrder();
     }
+
+    /// <summary>
+    /// Puts the window in (or out of) the topmost band directly. Setting the presenter's flag before the window is first
+    /// shown did not always stick after a launch (the pill showed up under other windows until the setting was toggled),
+    /// so this is done again once the window is visible and whenever the pill opens.
+    /// </summary>
+    public void ApplyZOrder() =>
+        SetWindowPos(_hwnd, _alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
     /// <summary>The largest expanded size the primary display can hold (DIPs), leaving a margin and the taskbar free.</summary>
     public SizeD AvailableSizeDip
@@ -83,6 +98,7 @@ internal sealed class PillWindowHost : IDisposable
     {
         Apply(_size);
         _appWindow.Show(false); // activateWindow: false -> do not steal focus on launch
+        ApplyZOrder();
     }
 
     /// <summary>While resting the window never takes activation; an expanded pill must be able to receive keys.</summary>

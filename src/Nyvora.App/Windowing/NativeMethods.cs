@@ -27,6 +27,16 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern uint GetDpiForWindow(nint hWnd);
 
+    public static readonly nint HWND_TOPMOST = -1;
+    public static readonly nint HWND_NOTOPMOST = -2;
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
     public const uint WM_HOTKEY = 0x0312;
     public const uint MOD_ALT = 0x1;
     public const uint MOD_CONTROL = 0x2;

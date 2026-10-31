@@ -232,6 +232,12 @@ public sealed partial class MainWindow : Window
     public void Show()
     {
         _host.Show();
+        // Once more shortly after launch: right after a sign-in or an update the shell is still busy arranging windows.
+        var topmost = DispatcherQueue.GetForCurrentThread().CreateTimer();
+        topmost.Interval = TimeSpan.FromSeconds(3);
+        topmost.IsRepeating = false;
+        topmost.Tick += (_, _) => _host.ApplyZOrder();
+        topmost.Start();
         UpdateContent();
         _reminderTimer.Start();
         CheckReminders();
@@ -841,6 +847,7 @@ public sealed partial class MainWindow : Window
         switch (next)
         {
             case PillState.Expanding:
+                _host.ApplyZOrder(); // a pill that opens must be on top, whatever happened to the z-order while it rested
                 if (_passiveExpand)
                 {
                     _passiveExpand = false;

@@ -24,7 +24,17 @@ public static class Win {
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, UIntPtr e);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
+  [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] public static extern int GetWindowLong(IntPtr h, int i);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  public static bool Topmost(uint pid) {
+    var top = new bool[1];
+    EnumWindows(delegate (IntPtr h, IntPtr l) {
+      uint p; GetWindowThreadProcessId(h, out p);
+      if (p == pid && IsWindowVisible(h) && (GetWindowLong(h, -20) & 0x8) != 0) top[0] = true;
+      return true;
+    }, IntPtr.Zero);
+    return top[0];
+  }
   public static List<RECT> Visible(uint pid) {
     var result = new List<RECT>();
     EnumWindows(delegate (IntPtr h, IntPtr l) {
@@ -102,6 +112,7 @@ try {
   Check ($pill.W -ge 100 * $scale -and $pill.W -le 260 * $scale -and $pill.H -le 60 * $scale) 'it starts as a small pill'
   Check ($pill.T -le 40 * $scale -and [Math]::Abs((($pill.L + $pill.R) / 2) - ($screen.Width / 2)) -le 24 * $scale) 'it sits at the top centre'
   Start-Sleep -Milliseconds 700
+  Check ([Win]::Topmost([uint32]$proc.Id)) 'the pill is always on top from the first launch'
   Shot 'resting'
 
   Write-Host 'Expand'
