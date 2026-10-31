@@ -27,8 +27,9 @@ public class NotchSuggestionTests
     [Fact]
     public void AfterTheCommandItOffersEveryTimerAndTone()
     {
-        Assert.Equal(new[] { "10s", "30s", "15m", "30m", "1h", "2h", "ok:", "warn:", "error:", "info:" }, Inserts("/notch "));
+        Assert.Equal(new[] { "10s", "30s", "15m", "30m", "1h", "2h", "pin", "ok:", "warn:", "error:", "info:" }, Inserts("/notch "));
         Assert.Contains("clears", NotchSuggestions.For("/notch ").Hint);
+        Assert.Contains("5 seconds", NotchSuggestions.For("/notch ").Hint); // says what happens with no timer
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public class NotchSuggestionTests
     public void OffersOnlyWhatIsNotUsedYet()
     {
         Assert.Equal(new[] { "ok:", "warn:", "error:", "info:" }, Inserts("/notch 30m "));
-        Assert.Equal(new[] { "10s", "30s", "15m", "30m", "1h", "2h" }, Inserts("/notch warn: "));
+        Assert.Equal(new[] { "10s", "30s", "15m", "30m", "1h", "2h", "pin" }, Inserts("/notch warn: "));
         Assert.Empty(Inserts("/notch 30m warn: "));
         Assert.Empty(Inserts("/notch warn: 30m "));
     }
@@ -85,6 +86,16 @@ public class NotchSuggestionTests
         Assert.Equal("warn", tone);
         Assert.Equal(TimeSpan.FromMinutes(30), duration);
         Assert.Equal("Server down", rest);
+    }
+
+    [Fact]
+    public void PinIsATimerChoiceToo()
+    {
+        Assert.Equal(new[] { "pin" }, Inserts("/notch p"));
+        Assert.Equal(new[] { "ok:", "warn:", "error:", "info:" }, Inserts("/notch pin ")); // pin counts as the timer
+        Assert.Empty(Inserts("/notch pin warn: "));
+        var set = NotchSuggestions.For("/notch pi");
+        Assert.Equal("/notch pin ", set.Apply(set.Items[0]));
     }
 
     [Fact]

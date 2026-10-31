@@ -172,19 +172,28 @@ public sealed class NyvoraTools
                     : new JsonObject { ["message"] = m.Text, ["tone"] = m.Tone.ToString().ToLowerInvariant(), ["expiresAt"] = m.ExpiresAt?.ToString("o", CultureInfo.InvariantCulture) });
             }),
         new Tool("set_notch_message",
-            $"Show a short message on Nyvora's notch (up to {NotchMessage.MaxLength} characters) in place of the task counters, for example a status like 'Deploying v2'. Replaces any earlier message.",
+            $"Show a short message on Nyvora's notch (up to {NotchMessage.MaxLength} characters) in place of the task counters, for example a status like 'Deploying v2'. Replaces any earlier message. With no time given it shows for {(int)NotchMessage.DefaultDuration.TotalSeconds} seconds and then goes away; give seconds or minutes for longer, or keep=true to keep it until you clear it.",
             ToolAccess.Write,
             Schema(("text", Str($"The message, up to {NotchMessage.MaxLength} characters")),
                 ("tone", Str("Optional colour: info (default), success, warning or error")),
-                ("minutes", Int($"Optional: remove the message by itself after this many minutes (1 to {NotchMessage.MaxMinutes}); omit to keep it until cleared")),
-                ("seconds", Int("Optional: like minutes but in seconds (5 to 86400), for a short message; wins over minutes if both are given"))).Require("text"),
+                ("minutes", Int($"Optional: remove the message by itself after this many minutes (1 to {NotchMessage.MaxMinutes}); if no time is given it shows for {(int)NotchMessage.DefaultDuration.TotalSeconds} seconds")),
+                ("seconds", Int("Optional: like minutes but in seconds (5 to 86400), for a short message; wins over minutes if both are given")),
+                ("keep", Bool("Optional: true keeps the message until clear_notch_message; use it rarely, and clear it when your work ends"))).Require("text"),
             (a, _, now) =>
             {
                 int? minutes = a["minutes"] is JsonNode n && n.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int)n : null;
                 int? seconds = a["seconds"] is JsonNode sn && sn.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int)sn : null;
-                var error = seconds is { } sec
-                    ? NotchMessage.TryCreateTimed(RequireStr(a, "text"), OptionalStr(a, "tone"), TimeSpan.FromSeconds(sec), now, out var message)
-                    : NotchMessage.TryCreate(RequireStr(a, "text"), OptionalStr(a, "tone"), minutes, now, out message);
+                var keep = a["keep"] is JsonNode kn && kn.GetValueKind() == System.Text.Json.JsonValueKind.True;
+                var text = RequireStr(a, "text");
+                var tone = OptionalStr(a, "tone");
+                // No time given means a short default, so a forgotten message cannot linger; keep=true is the opt-in to stay.
+                var error = keep
+                    ? NotchMessage.TryCreateTimed(text, tone, null, now, out var message)
+                    : seconds is { } sec
+                        ? NotchMessage.TryCreateTimed(text, tone, TimeSpan.FromSeconds(sec), now, out message)
+                        : minutes is not null
+                            ? NotchMessage.TryCreate(text, tone, minutes, now, out message)
+                            : NotchMessage.TryCreateTimed(text, tone, NotchMessage.DefaultDuration, now, out message);
                 if (error is not null)
                 {
                     throw new ToolError(error);

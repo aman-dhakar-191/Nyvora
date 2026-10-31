@@ -16,6 +16,9 @@ public class NotchCommandTests
     [InlineData("2h Focus time", null, 7200, "Focus time")]
     [InlineData("30M focus", null, 1800, "focus")]
     [InlineData("30s Quick look", null, 30, "Quick look")]
+    [InlineData("pin Deploying", null, 0, "Deploying")]          // pin: stays until cleared (a zero time)
+    [InlineData("PIN warn: Careful", "warn", 0, "Careful")]
+    [InlineData("warn: pin Careful", "warn", 0, "Careful")]
     [InlineData("10S go", null, 10, "go")]
     [InlineData("warn: Server down", "warn", null, "Server down")]
     [InlineData("30m warn: Server down", "warn", 1800, "Server down")]
@@ -73,6 +76,43 @@ public class NotchCommandTests
         var error = NotchMessage.TryCreateTimed(text, tone, duration, Now, out var m);
         Assert.Contains("5 seconds to 24 hours", error);
         Assert.Null(m);
+    }
+
+    [Fact]
+    public void WithNoTimeTheMessageShowsBrieflyThenGoes()
+    {
+        var (tone, duration, text) = NotchMessage.ParseCommandText("Deploying v2");
+        Assert.Null(duration); // nothing asked for
+        Assert.Equal(NotchMessage.DefaultDuration, NotchMessage.Effective(duration));
+
+        Assert.Null(NotchMessage.TryCreateTimed(text, tone, NotchMessage.Effective(duration), Now, out var m));
+        Assert.Equal(Now + NotchMessage.DefaultDuration, m!.ExpiresAt);
+        Assert.True(m.IsActive(Now.AddSeconds(4)));
+        Assert.False(m.IsActive(Now.AddSeconds(6)));
+    }
+
+    [Fact]
+    public void PinKeepsTheMessageUntilItIsCleared()
+    {
+        var (tone, duration, text) = NotchMessage.ParseCommandText("pin Deploying v2");
+        Assert.Null(NotchMessage.Effective(duration));
+        Assert.Null(NotchMessage.TryCreateTimed(text, tone, NotchMessage.Effective(duration), Now, out var m));
+        Assert.Null(m!.ExpiresAt);
+        Assert.True(m.IsActive(Now.AddDays(30)));
+    }
+
+    [Fact]
+    public void ATimerIsUsedAsGiven()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(30), NotchMessage.Effective(TimeSpan.FromMinutes(30)));
+        Assert.Equal(TimeSpan.FromSeconds(10), NotchMessage.Effective(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public void TheDefaultIsInsideTheAllowedRange()
+    {
+        Assert.True(NotchMessage.DefaultDuration >= NotchMessage.MinDuration);
+        Assert.True(NotchMessage.DefaultDuration <= NotchMessage.MaxDuration);
     }
 
     [Fact]

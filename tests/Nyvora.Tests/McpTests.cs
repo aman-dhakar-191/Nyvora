@@ -295,6 +295,28 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void ANotchMessageWithNoTimeShowsBrieflyAndKeepPinsIt()
+    {
+        var path = Path.Combine(_dir, "notch.json");
+        var s = Server(write: true);
+
+        var plain = Payload(ToolCall(s, "set_notch_message", new { text = "Quick ping" }));
+        Assert.Equal(Now + NotchMessage.DefaultDuration, NotchMessageStore.Load(path, Now)!.ExpiresAt);
+        Assert.NotNull(plain["expiresAt"]);
+        Assert.Null(NotchMessageStore.Load(path, Now.AddSeconds(6))); // gone by itself
+
+        var pinned = Payload(ToolCall(s, "set_notch_message", new { text = "Long job", keep = true }));
+        Assert.Null(pinned["expiresAt"]);
+        Assert.NotNull(NotchMessageStore.Load(path, Now.AddDays(2)));
+
+        // An explicit time still wins over the default; keep wins over a time.
+        ToolCall(s, "set_notch_message", new { text = "Timed", minutes = 10 });
+        Assert.Equal(Now.AddMinutes(10), NotchMessageStore.Load(path, Now)!.ExpiresAt);
+        ToolCall(s, "set_notch_message", new { text = "Both", seconds = 30, keep = true });
+        Assert.Null(NotchMessageStore.Load(path, Now)!.ExpiresAt);
+    }
+
+    [Fact]
     public void NotchMessagesCanLastSeconds()
     {
         var s = Server(write: true);

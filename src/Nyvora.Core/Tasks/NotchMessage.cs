@@ -25,6 +25,19 @@ public sealed class NotchMessage
 
     public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(24);
 
+    /// <summary>How long a message shows when nobody gave a time: long enough to read 40 characters, short enough never to linger.</summary>
+    public static readonly TimeSpan DefaultDuration = TimeSpan.FromSeconds(5);
+
+    /// <summary>What a person or agent asks for to keep a message until it is cleared ("pin" in the command).</summary>
+    public static readonly TimeSpan Pinned = TimeSpan.Zero;
+
+    /// <summary>
+    /// Turns what was asked for into how long the message lasts: nothing asked means <see cref="DefaultDuration"/>,
+    /// <see cref="Pinned"/> means no expiry (null), anything else is used as given.
+    /// </summary>
+    public static TimeSpan? Effective(TimeSpan? requested) =>
+        requested is null ? DefaultDuration : requested == Pinned ? null : requested;
+
     public string Text { get; set; } = "";
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -121,14 +134,15 @@ public sealed class NotchMessage
     }
 
     private static readonly System.Text.RegularExpressions.Regex DurationToken =
-        new(@"^(\d{1,5})\s*([smh])(?=\s|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        new(@"^(?:(\d{1,5})\s*([smh])|(pin))(?=\s|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static readonly System.Text.RegularExpressions.Regex ToneToken =
         new(@"^(info|ok|success|warn|warning|err|error)\s*:\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Reads what follows "/notch": up to two leading options, in either order, then the text.
-    /// <c>30s</c>, <c>30m</c> or <c>2h</c> is how long the message stays; <c>warn:</c> (or ok:, error:, info:) is its tone.
+    /// <c>30s</c>, <c>30m</c> or <c>2h</c> is how long the message stays (<c>pin</c> keeps it until cleared; with none it
+    /// shows for <see cref="DefaultDuration"/>; see <see cref="Effective"/>); <c>warn:</c> (or ok:, error:, info:) is its tone.
     /// "30m warn: Server down", "warn: 30m Server down" and "Server down" all work.
     /// </summary>
     public static (string? Tone, TimeSpan? Duration, string Text) ParseCommandText(string payload)
@@ -140,13 +154,21 @@ public sealed class NotchMessage
         {
             if (duration is null && DurationToken.Match(rest) is { Success: true } d)
             {
-                var n = int.Parse(d.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
-                duration = char.ToLowerInvariant(d.Groups[2].Value[0]) switch
+                if (d.Groups[3].Success)
                 {
-                    's' => TimeSpan.FromSeconds(n),
-                    'h' => TimeSpan.FromHours(n),
-                    _ => TimeSpan.FromMinutes(n),
-                };
+                    duration = Pinned; // "pin": stays until cleared
+                }
+                else
+                {
+                    var n = int.Parse(d.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    duration = char.ToLowerInvariant(d.Groups[2].Value[0]) switch
+                    {
+                        's' => TimeSpan.FromSeconds(n),
+                        'h' => TimeSpan.FromHours(n),
+                        _ => TimeSpan.FromMinutes(n),
+                    };
+                }
+
                 rest = rest[d.Length..].TrimStart();
             }
             else if (tone is null && ToneToken.Match(rest) is { Success: true } t)

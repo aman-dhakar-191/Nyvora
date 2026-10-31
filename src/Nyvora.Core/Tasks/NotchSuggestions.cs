@@ -47,6 +47,7 @@ public static class NotchSuggestions
         new("30m", "30 minutes"),
         new("1h", "1 hour"),
         new("2h", "2 hours"),
+        new("pin", "stays until you clear it"),
     };
 
     private static readonly NotchSuggestion[] Tones =
@@ -57,7 +58,7 @@ public static class NotchSuggestions
         new("info:", "teal (default)"),
     };
 
-    private static readonly Regex DurationToken = new(@"^\d{1,5}\s*[smh](?=\s|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex DurationToken = new(@"^(?:\d{1,5}\s*[smh]|pin)(?=\s|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex ToneToken = new(@"^(info|ok|success|warn|warning|err|error)\s*:\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static NotchSuggestionSet For(string? input)
@@ -140,7 +141,7 @@ public static class NotchSuggestions
         }
 
         var hint = partial.Length > 0 ? null
-            : !hasTimer && !hasTone && text[(space + 1)..].Trim().Length == 0 ? "Type a message, or pick a timer or tone first. Enter with no message clears the notch."
+            : !hasTimer && !hasTone && text[(space + 1)..].Trim().Length == 0 ? "Type a message: it shows for 5 seconds unless you pick a timer (pin keeps it). Enter with no message clears the notch."
             : hasTimer && hasTone ? "Now the message."
             : hasTimer ? "Pick a tone, or just type the message."
             : hasTone ? "Add a timer, or just type the message."
