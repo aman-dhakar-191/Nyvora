@@ -166,6 +166,14 @@ public sealed partial class TasksPanel : UserControl
     private void SwapInputAndSearch(bool search)
     {
         _searchOpen = search;
+        if (!search && _nudge is not null)
+        {
+            // A status reminder is showing and it has no add box, so closing the search must not bring one back.
+            SearchBar.Visibility = Visibility.Collapsed;
+            SearchBar.Opacity = 0;
+            return;
+        }
+
         var show = search ? (UIElement)SearchBar : InputRow;
         var hide = search ? (UIElement)InputRow : SearchBar;
         if (_swapTimer is null)
@@ -238,6 +246,10 @@ public sealed partial class TasksPanel : UserControl
     public void ShowNudge(string message)
     {
         _nudge = message;
+        // The hourly status reminder is for updating statuses, not for adding tasks: no add box (or anything hanging off it).
+        InputRow.Visibility = Visibility.Collapsed;
+        ReminderPicker.Visibility = Visibility.Collapsed;
+        CommandHints.Visibility = Visibility.Collapsed;
         Refresh();
     }
 
@@ -246,6 +258,13 @@ public sealed partial class TasksPanel : UserControl
         if (_nudge is not null)
         {
             _nudge = null;
+            if (!_searchOpen)
+            {
+                InputRow.Visibility = Visibility.Visible;
+                InputRow.Opacity = 1;
+                InputRow.IsHitTestVisible = true;
+            }
+
             Refresh();
         }
     }
@@ -284,6 +303,7 @@ public sealed partial class TasksPanel : UserControl
     /// <summary>Ctrl+N: leave search (which hides the input) and put the cursor in the add box.</summary>
     public void ShowAddInput()
     {
+        ClearNudge(); // asking to add a task is an explicit wish for the add box, so it comes back
         CloseSearch();
         FocusInput();
     }
