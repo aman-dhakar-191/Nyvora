@@ -110,4 +110,5 @@ Nyvora ships `nyvora-mcp.exe` next to `Nyvora.exe`: a [Model Context Protocol](h
 - Changes made by an agent appear in the running app within about half a second (the app watches `tasks.json`). A cross-process lock keeps the two from interleaving, but if you edit a task in the app at the very same moment an agent edits the file, the later save wins.
 - Task titles are text an agent will read; do not connect an agent you do not trust, and think before enabling write access for one that also reads untrusted content.
 - `--data-dir PATH` points it at another data folder (used by CI).
+- **A Claude skill** in `.claude/skills/nyvora/SKILL.md` teaches an agent how to use these tools well: look before adding, say what it changed, and show short progress messages on the notch and clear them when done. It is picked up automatically in this repository; to use it everywhere, copy the `nyvora` folder to `~/.claude/skills/` (Claude Code).
 
