@@ -10,6 +10,25 @@ public sealed record NotchSuggestionSet(string Prefix, IReadOnlyList<NotchSugges
 {
     public static readonly NotchSuggestionSet None = new("", Array.Empty<NotchSuggestion>(), null);
 
+    /// <summary>
+    /// Moves the highlighted suggestion with the arrow keys: from "none" (-1) Down lands on the first and Up on the last,
+    /// and both wrap around. Returns -1 when there is nothing to pick.
+    /// </summary>
+    public static int Move(int current, int count, int delta)
+    {
+        if (count <= 0)
+        {
+            return -1;
+        }
+
+        if (current < 0 || current >= count)
+        {
+            return delta > 0 ? 0 : count - 1;
+        }
+
+        return (((current + delta) % count) + count) % count;
+    }
+
     /// <summary>The add box's text after picking <paramref name="s"/>: what was typed so far, plus the suggestion and a space.</summary>
     public string Apply(NotchSuggestion s) => Prefix + s.Insert + " ";
 }

@@ -101,3 +101,21 @@ public class NotchSuggestionTests
         return set.Apply(set.Items.Single(s => s.Insert == insert));
     }
 }
+
+public class SuggestionCursorTests
+{
+    [Theory]
+    [InlineData(-1, 4, 1, 0)]   // nothing highlighted: Down takes the first
+    [InlineData(-1, 4, -1, 3)]  // Up takes the last
+    [InlineData(0, 4, 1, 1)]
+    [InlineData(2, 4, 1, 3)]
+    [InlineData(3, 4, 1, 0)]    // wraps forward
+    [InlineData(0, 4, -1, 3)]   // wraps back
+    [InlineData(1, 4, -1, 0)]
+    [InlineData(0, 1, 1, 0)]    // a single suggestion stays put
+    [InlineData(0, 0, 1, -1)]   // nothing to pick
+    [InlineData(-1, 0, -1, -1)]
+    [InlineData(9, 4, 1, 0)]    // a stale index (the list shrank) starts over
+    public void MovesAndWraps(int current, int count, int delta, int expected) =>
+        Assert.Equal(expected, NotchSuggestionSet.Move(current, count, delta));
+}

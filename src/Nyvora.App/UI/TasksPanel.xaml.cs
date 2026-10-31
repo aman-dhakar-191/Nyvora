@@ -1238,11 +1238,36 @@ public sealed partial class TasksPanel : UserControl
     }
 
     private NotchSuggestionSet _hints = NotchSuggestionSet.None;
+    private int _hintIndex = -1; // the chip picked with the arrow keys, or -1
+
+    /// <summary>Marks the chip chosen with the arrow keys.</summary>
+    private void ShowHintSelection()
+    {
+        for (var i = 0; i < CommandChips.Children.Count; i++)
+        {
+            if (CommandChips.Children[i] is not HandButton chip)
+            {
+                continue;
+            }
+
+            if (i == _hintIndex)
+            {
+                chip.Background = new SolidColorBrush(Color.FromArgb(0x40, 0x5E, 0xEA, 0xD4));
+                chip.BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD4));
+            }
+            else
+            {
+                chip.ClearValue(Control.BackgroundProperty);
+                chip.ClearValue(Control.BorderBrushProperty);
+            }
+        }
+    }
 
     /// <summary>Shows what a slash command can take next, as clickable chips under the add box.</summary>
     private void OnInputChanged(object sender, TextChangedEventArgs e)
     {
         _hints = NotchSuggestions.For(Input.Text);
+        _hintIndex = -1; // new text, new suggestions
         CommandChips.Children.Clear();
         foreach (var s in _hints.Items)
         {
@@ -1259,9 +1284,47 @@ public sealed partial class TasksPanel : UserControl
             CommandChips.Children.Add(chip);
         }
 
-        CommandHintText.Text = _hints.Hint ?? "";
-        CommandHintText.Visibility = string.IsNullOrEmpty(_hints.Hint) ? Visibility.Collapsed : Visibility.Visible;
+        // Say how to choose when there is something to choose from.
+        var keys = _hints.Items.Count > 0 ? "↑↓ choose · Tab or Enter pick" : "";
+        CommandHintText.Text = string.Join("   ", new[] { _hints.Hint, keys }.Where(t => !string.IsNullOrEmpty(t)));
+        CommandHintText.Visibility = CommandHintText.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         CommandHints.Visibility = _hints.Items.Count > 0 || !string.IsNullOrEmpty(_hints.Hint) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Arrow keys choose among the suggestions: Up/Down always, Right when the cursor is at the end of the text (where it
+    /// has nothing else to do), Left only once a chip is chosen. Tab or Enter picks the chosen one (Tab takes the first
+    /// when none is chosen), Esc lets go of the choice. Returns true when the key was used.
+    /// </summary>
+    private bool HandleHintKey(KeyRoutedEventArgs e)
+    {
+        var count = _hints.Items.Count;
+        var atEnd = Input.SelectionStart == Input.Text.Length && Input.SelectionLength == 0;
+        switch (e.Key)
+        {
+            case VirtualKey.Down:
+            case VirtualKey.Right when atEnd:
+                _hintIndex = NotchSuggestionSet.Move(_hintIndex, count, 1);
+                ShowHintSelection();
+                return true;
+            case VirtualKey.Up:
+            case VirtualKey.Left when _hintIndex >= 0:
+                _hintIndex = NotchSuggestionSet.Move(_hintIndex, count, -1);
+                ShowHintSelection();
+                return true;
+            case VirtualKey.Tab:
+                ApplyHint(_hints.Items[Math.Max(_hintIndex, 0)]);
+                return true;
+            case VirtualKey.Enter when _hintIndex >= 0:
+                ApplyHint(_hints.Items[_hintIndex]); // Enter submits the command only when no chip is chosen
+                return true;
+            case VirtualKey.Escape when _hintIndex >= 0:
+                _hintIndex = -1;
+                ShowHintSelection();
+                return true;
+            default:
+                return false;
+        }
     }
 
     private void ApplyHint(NotchSuggestion s)
@@ -1273,9 +1336,8 @@ public sealed partial class TasksPanel : UserControl
 
     private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Tab && _hints.Items.Count > 0)
+        if (_hints.Items.Count > 0 && HandleHintKey(e))
         {
-            ApplyHint(_hints.Items[0]); // Tab takes the first suggestion
             e.Handled = true;
             return;
         }
