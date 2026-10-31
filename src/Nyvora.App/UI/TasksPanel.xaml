@@ -54,7 +54,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="Input" PlaceholderText="Add a task, press Enter" MaxLength="200" MinHeight="38"
-                     VerticalContentAlignment="Center" Padding="12,8,12,0" KeyDown="OnInputKeyDown" />
+                     VerticalContentAlignment="Center" Padding="12,8,12,0" KeyDown="OnInputKeyDown" TextChanged="OnInputChanged" />
             <ui:HandButton x:Name="ReminderButton" Grid.Column="1" Click="OnReminderButtonClick" MinHeight="38" MinWidth="44"
                            ToolTipService.ToolTip="Add a reminder to the next task">
                 <TextBlock x:Name="ReminderLabel" Text="⏰" FontSize="13" />
@@ -75,6 +75,11 @@
             </ui:HandButton>
         </Grid>
         <StackPanel Grid.Row="2" Spacing="8">
+            <!-- While a slash command is being typed: what can come next (timers, tones), as chips you can click or Tab to. -->
+            <StackPanel x:Name="CommandHints" Visibility="Collapsed" Spacing="4">
+                <TextBlock x:Name="CommandHintText" FontSize="11" Foreground="#FF8A8AA0" TextWrapping="Wrap" />
+                <StackPanel x:Name="CommandChips" Orientation="Horizontal" Spacing="6" />
+            </StackPanel>
             <!-- Opens under the input only when the reminder button is clicked. -->
             <Border x:Name="ReminderPicker" Visibility="Collapsed" CornerRadius="8"
                     Background="#14FFFFFF" Padding="10,8" />

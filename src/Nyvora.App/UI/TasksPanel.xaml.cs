@@ -1217,8 +1217,49 @@ public sealed partial class TasksPanel : UserControl
         return chip;
     }
 
+    private NotchSuggestionSet _hints = NotchSuggestionSet.None;
+
+    /// <summary>Shows what a slash command can take next, as clickable chips under the add box.</summary>
+    private void OnInputChanged(object sender, TextChangedEventArgs e)
+    {
+        _hints = NotchSuggestions.For(Input.Text);
+        CommandChips.Children.Clear();
+        foreach (var s in _hints.Items)
+        {
+            var chip = new HandButton
+            {
+                Content = new TextBlock { Text = s.Insert, FontSize = 12 },
+                Padding = new Thickness(9, 2, 9, 2),
+                MinHeight = 0,
+                CornerRadius = new CornerRadius(12),
+            };
+            ToolTipService.SetToolTip(chip, s.Hint);
+            var picked = s;
+            chip.Click += (_, _) => ApplyHint(picked);
+            CommandChips.Children.Add(chip);
+        }
+
+        CommandHintText.Text = _hints.Hint ?? "";
+        CommandHintText.Visibility = string.IsNullOrEmpty(_hints.Hint) ? Visibility.Collapsed : Visibility.Visible;
+        CommandHints.Visibility = _hints.Items.Count > 0 || !string.IsNullOrEmpty(_hints.Hint) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ApplyHint(NotchSuggestion s)
+    {
+        Input.Text = _hints.Apply(s);
+        Input.SelectionStart = Input.Text.Length;
+        Input.Focus(FocusState.Programmatic);
+    }
+
     private void OnInputKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == VirtualKey.Tab && _hints.Items.Count > 0)
+        {
+            ApplyHint(_hints.Items[0]); // Tab takes the first suggestion
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == VirtualKey.Enter)
         {
             AddFromInput();
