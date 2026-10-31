@@ -545,6 +545,14 @@ public sealed partial class TasksPanel : UserControl
             {
                 title.TextTrimming = TextTrimming.None;
                 title.TextWrapping = TextWrapping.Wrap;
+                if (hoverBar is not null && trail is not null)
+                {
+                    // Compact: the hover bar sits over the right end of the row, so wrap the title before it
+                    // instead of letting the bar cover the last letters. The trail (due time) is under the bar too.
+                    hoverBar.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var covered = hoverBar.DesiredSize.Width - trail.ActualWidth - row.ColumnSpacing;
+                    title.Margin = new Thickness(0, 0, Math.Max(0, covered) + 4, 0);
+                }
             }
         };
         row.PointerEntered += (_, _) =>
@@ -566,6 +574,7 @@ public sealed partial class TasksPanel : UserControl
         row.PointerExited += (_, _) =>
         {
             expandTimer.Stop();
+            title.Margin = new Thickness(0);
             title.TextWrapping = TextWrapping.NoWrap;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
             row.Background = new SolidColorBrush(Colors.Transparent);
