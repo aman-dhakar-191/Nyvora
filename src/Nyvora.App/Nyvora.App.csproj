@@ -25,6 +25,10 @@
     <EmbeddedResource Include="Services\UpdateHelper.ps1" LogicalName="UpdateHelper.ps1" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The Keka timesheet fill script and its field names, shipped beside the app (keka\ folder). -->
+    <Content Include="keka\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Nyvora.Core\Nyvora.Core.csproj" />
   </ItemGroup>
 </Project>

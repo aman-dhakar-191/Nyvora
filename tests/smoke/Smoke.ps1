@@ -80,14 +80,14 @@ function Click([int]$x, [int]$y) {
   [Win]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
 }
 
-function Shot([string]$name) {
+function Shot([string]$name, [double]$cropH = 560) {
   $bmp = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
   $g.Dispose()
   $bmp.Save((Join-Path $OutDir ($name + '.png')), [System.Drawing.Imaging.ImageFormat]::Png)
   # The notch area only (top centre), as a small JPEG that fits in a log.
-  $w = [Math]::Min($screen.Width, [int](1000 * $scale)); $h = [Math]::Min($screen.Height, [int](560 * $scale))
+  $w = [Math]::Min($screen.Width, [int](1000 * $scale)); $h = [Math]::Min($screen.Height, [int]($cropH * $scale))
   $crop = $bmp.Clone((New-Object System.Drawing.Rectangle ([int](($screen.Width - $w) / 2)), 0, $w, $h), $bmp.PixelFormat)
   $jpg = Join-Path $OutDir ($name + '.jpg')
   $crop.Save($jpg, [System.Drawing.Imaging.ImageFormat]::Jpeg)
@@ -96,6 +96,9 @@ function Shot([string]$name) {
   $i = 0
   for ($o = 0; $o -lt $b64.Length; $o += 3000) { Write-Host ('SHOT:' + $name + ':' + $i + ':' + $b64.Substring($o, [Math]::Min(3000, $b64.Length - $o))); $i++ }
 }
+
+# The daily check-in and weekly reminder would pop up over the test when the runner's clock is past their time.
+$env:NYVORA_NO_PROMPTS = '1'
 
 $proc = $null
 try {
@@ -239,6 +242,22 @@ try {
   } else {
     Check $false 'compact layout opens narrower than the normal list' 'no pill'
   }
+
+  Write-Host 'Daily check-in form'
+  # Ask the app to open the check-in form once, and look at it (the real schedule is covered by unit tests).
+  if ($null -ne $compactProc -and -not $compactProc.HasExited) { Stop-Process -Id $compactProc.Id -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 800 }  # one instance at a time
+  $env:NYVORA_FORCE_CHECKIN = '1'
+  $checkProc = Start-Process -FilePath $Exe -PassThru
+  $form = $null
+  $end = (Get-Date).AddSeconds(25)
+  do {
+    Start-Sleep -Milliseconds 300
+    $form = [Win]::Visible([uint32]$checkProc.Id) | Where-Object { ($_.Right - $_.Left) -ge 400 * $scale -and ($_.Bottom - $_.Top) -ge 400 * $scale } | Select-Object -First 1
+  } while ($null -eq $form -and (Get-Date) -lt $end)
+  Check ($null -ne $form) 'the daily check-in form opens' $(if ($null -ne $form) { "{0}x{1} at {2},{3}" -f ($form.Right - $form.Left), ($form.Bottom - $form.Top), $form.Left, $form.Top })
+  Start-Sleep -Milliseconds 600
+  Shot 'checkin' 760
+  Remove-Item Env:NYVORA_FORCE_CHECKIN
 }
 catch {
   Write-Host ('smoke test stopped early: ' + $_.Exception.Message)
@@ -248,6 +267,7 @@ catch {
 finally {
   if ($null -ne $proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
   if ($null -ne $compactProc -and -not $compactProc.HasExited) { Stop-Process -Id $compactProc.Id -Force -ErrorAction SilentlyContinue }
+  if ($null -ne $checkProc -and -not $checkProc.HasExited) { Stop-Process -Id $checkProc.Id -Force -ErrorAction SilentlyContinue }
 }
 
 if (Test-Path $logPath) {

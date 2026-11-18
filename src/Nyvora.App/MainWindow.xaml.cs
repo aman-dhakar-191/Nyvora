@@ -10,6 +10,8 @@ using Nyvora.Core.Settings;
 using Nyvora.Core.Storage;
 using Nyvora.Core.State;
 using Nyvora.Core.Tasks;
+using Nyvora.Core.Timesheet;
+using Nyvora.App.UI;
 using Windows.UI;
 
 namespace Nyvora.App;
@@ -96,6 +98,9 @@ public sealed partial class MainWindow : Window
         Panel.Attach(_tasks, _updates, _statuses, _tags);
         Panel.SettingsRequested += ToggleSettings;
         Side.Attach(_statuses, _tags, _updates, _settings.Current.AlwaysOnTop, _statusNudge.Enabled, _settings.Current.LaunchAtSignIn);
+        Side.AttachTimesheet(_settings.Current, _settings.Save);
+        Side.CheckInNowRequested += () => OpenCheckIn(manual: true);
+        Side.KekaSignInRequested += () => _ = SignInToKekaAsync();
         Side.LaunchAtSignInChanged += on =>
         {
             StartupService.SetLaunchAtSignIn(on);
@@ -369,6 +374,7 @@ public sealed partial class MainWindow : Window
     private void CheckReminders()
     {
         CheckStatusNudge();
+        CheckTimesheetPrompts();
         var fired = _tasks.TakePendingNotifications(DateTimeOffset.Now);
         UpdateBadge();
         if (fired.Count == 0)
@@ -386,6 +392,156 @@ public sealed partial class MainWindow : Window
         }
 
         ExpandPassively();
+    }
+
+    private CheckInWindow? _checkInWindow;
+    private bool _kekaBusy;
+    private bool _forcedCheckIn;
+
+    private readonly CheckInStore _checkIns = new(Path.Combine(DataFolders.Active(), CheckInStore.FileName));
+
+    /// <summary>The daily check-in and the weekly "submit your timesheet" reminder, each once a day at most.</summary>
+    private void CheckTimesheetPrompts()
+    {
+        // Automated tests turn the prompts off (they would pop up over the test) and can ask for the form once to look at it.
+        if (Environment.GetEnvironmentVariable("NYVORA_NO_PROMPTS") == "1")
+        {
+            if (Environment.GetEnvironmentVariable("NYVORA_FORCE_CHECKIN") == "1" && !_forcedCheckIn)
+            {
+                _forcedCheckIn = true;
+                OpenCheckIn(manual: true);
+            }
+
+            return;
+        }
+
+        var s = _settings.Current;
+        var now = DateTimeOffset.Now;
+        var today = DateOnly.FromDateTime(now.LocalDateTime);
+
+        if (s.CheckInEnabled && _checkInWindow is null && _checkIns.Get(today) is null
+            && CheckInSchedule.IsDue(now, s.CheckInTime, s.CheckInDays, s.LastCheckInPrompt))
+        {
+            s.LastCheckInPrompt = today; // asked once; "Not now" is respected until tomorrow
+            _settings.Save();
+            Log.Info("Daily check-in due");
+            OpenCheckIn(manual: false);
+        }
+
+        if (s.WeeklyReminderEnabled && CheckInSchedule.IsWeeklyDue(now, s.WeeklyReminderDay, s.WeeklyReminderTime, s.LastWeeklyReminder))
+        {
+            s.LastWeeklyReminder = today;
+            _settings.Save();
+            Log.Info("Weekly timesheet reminder");
+            _kekaNote = new NotchMessage { Text = "Submit your Keka timesheet", Tone = NotchTone.Warning, ExpiresAt = now + TimeSpan.FromHours(1) };
+            UpdateBadge();
+            Panel.ShowNudge("Time to submit your Keka timesheet");
+            ExpandPassively();
+        }
+    }
+
+    private void OpenCheckIn(bool manual)
+    {
+        if (_checkInWindow is { } open)
+        {
+            open.Activate();
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var all = _checkIns.Load();
+        var previous = all.FirstOrDefault(e => e.Date == today) ?? all.LastOrDefault();
+        var canFill = KekaResult.ValidateUrl(_settings.Current.KekaUrl) is null;
+        var window = new CheckInWindow(today, previous, canFill, (entry, fill) =>
+        {
+            if (_checkIns.Save(entry) is { } problem)
+            {
+                return problem;
+            }
+
+            Log.Info($"Check-in saved ({entry.Hours} h)");
+            if (fill)
+            {
+                _ = FillKekaAsync(entry);
+            }
+
+            return null;
+        });
+        window.Closed += (_, _) => _checkInWindow = null;
+        _checkInWindow = window;
+        window.Activate();
+        Log.Info(manual ? "Check-in opened from Settings" : "Check-in opened");
+    }
+
+    private async Task FillKekaAsync(CheckInEntry entry)
+    {
+        if (_kekaBusy)
+        {
+            return;
+        }
+
+        _kekaBusy = true;
+        try
+        {
+            _kekaNote = KekaResult.Running();
+            UpdateBadge();
+            var outcome = await KekaService.FillAsync(entry, _settings.Current.KekaUrl, _settings.Current.KekaPressSave);
+            Log.Info($"Keka fill finished: {outcome}");
+            if (outcome == KekaOutcome.Filled)
+            {
+                _checkIns.MarkFilled(entry.Date);
+            }
+
+            _kekaNote = KekaResult.Notch(outcome, DateTimeOffset.Now);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Keka fill failed unexpectedly", ex);
+            _kekaNote = KekaResult.Notch(KekaOutcome.Failed, DateTimeOffset.Now);
+        }
+        finally
+        {
+            _kekaBusy = false;
+            UpdateBadge();
+        }
+    }
+
+    private async Task SignInToKekaAsync()
+    {
+        if (_kekaBusy)
+        {
+            return;
+        }
+
+        if (KekaResult.ValidateUrl(_settings.Current.KekaUrl) is { } problem)
+        {
+            _kekaNote = new NotchMessage { Text = "Keka: set the address first", Tone = NotchTone.Warning, ExpiresAt = DateTimeOffset.Now.AddSeconds(15) };
+            Log.Info("Keka sign-in skipped: " + problem);
+            UpdateBadge();
+            return;
+        }
+
+        _kekaBusy = true;
+        try
+        {
+            _kekaNote = new NotchMessage { Text = "Keka: sign in in the Edge window", Tone = NotchTone.Info };
+            UpdateBadge();
+            var outcome = await KekaService.SignInAsync(_settings.Current.KekaUrl);
+            Log.Info($"Keka sign-in finished: {outcome}");
+            _kekaNote = outcome == KekaOutcome.Filled
+                ? new NotchMessage { Text = "Keka: signed in", Tone = NotchTone.Success, ExpiresAt = DateTimeOffset.Now.AddSeconds(10) }
+                : KekaResult.Notch(outcome, DateTimeOffset.Now);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Keka sign-in failed unexpectedly", ex);
+            _kekaNote = KekaResult.Notch(KekaOutcome.Failed, DateTimeOffset.Now);
+        }
+        finally
+        {
+            _kekaBusy = false;
+            UpdateBadge();
+        }
     }
 
     /// <summary>Opens the pill without taking focus from whatever the user is doing.</summary>
@@ -428,7 +584,7 @@ public sealed partial class MainWindow : Window
 
         // A temporary message ("/notch ..." or an agent) takes the notch's place while it lasts; due and open come back after.
         // Nyvora's own progress (an update, a sync) comes first while it lasts, then a message someone set.
-        var note = new[] { _updateNote, _syncNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
+        var note = new[] { _updateNote, _kekaNote, _syncNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
         if (note is not null)
         {
             RestingLabel.Text = note.Text;
@@ -518,6 +674,7 @@ public sealed partial class MainWindow : Window
     // Nyvora's own progress on the notch. Never saved; each one clears itself or when its process ends.
     private NotchMessage? _updateNote;
     private NotchMessage? _syncNote;
+    private NotchMessage? _kekaNote;
 
     private void OnUpdateChanged()
     {
@@ -588,6 +745,12 @@ public sealed partial class MainWindow : Window
             if (_syncNote is { } s && !s.IsActive(now))
             {
                 _syncNote = null;
+                changed = true;
+            }
+
+            if (_kekaNote is { } k && !k.IsActive(now))
+            {
+                _kekaNote = null;
                 changed = true;
             }
 

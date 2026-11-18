@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using Nyvora.App.Services;
 using Nyvora.Core.Settings;
 using Nyvora.Core.Tasks;
+using Nyvora.Core.Timesheet;
 using Windows.System;
 
 namespace Nyvora.App.UI;
@@ -124,6 +125,106 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? LaunchAtSignInChanged;
 
+    public event Action? CheckInNowRequested;
+
+    public event Action? KekaSignInRequested;
+
+    private AppSettings? _timesheet;
+    private Action? _saveTimesheet;
+
+    /// <summary>Shows the timesheet settings and writes changes straight into <paramref name="settings"/> (then calls <paramref name="save"/>).</summary>
+    internal void AttachTimesheet(AppSettings settings, Action save)
+    {
+        _timesheet = null; // no write-back while filling the boxes
+        CheckInToggle.IsChecked = settings.CheckInEnabled;
+        CheckInTimeBox.Text = settings.CheckInTime;
+        CheckInDaysBox.Text = settings.CheckInDays;
+        WeeklyToggle.IsChecked = settings.WeeklyReminderEnabled;
+        WeeklyDayBox.Text = settings.WeeklyReminderDay;
+        WeeklyTimeBox.Text = settings.WeeklyReminderTime;
+        KekaUrlBox.Text = settings.KekaUrl;
+        KekaSaveToggle.IsChecked = settings.KekaPressSave;
+        _timesheet = settings;
+        _saveTimesheet = save;
+    }
+
+    private void OnTimesheetChanged(object sender, RoutedEventArgs e)
+    {
+        if (_timesheet is not { } s)
+        {
+            return;
+        }
+
+        var problems = new List<string>();
+        s.CheckInEnabled = CheckInToggle.IsChecked == true;
+        s.WeeklyReminderEnabled = WeeklyToggle.IsChecked == true;
+        s.KekaPressSave = KekaSaveToggle.IsChecked == true;
+
+        if (CheckInSchedule.TryParseTime(CheckInTimeBox.Text, out var t))
+        {
+            s.CheckInTime = t.ToString(@"hh\:mm");
+        }
+        else
+        {
+            problems.Add("Check-in time must look like 18:00.");
+        }
+
+        var days = CheckInSchedule.ParseDays(CheckInDaysBox.Text);
+        if (days.Count > 0)
+        {
+            s.CheckInDays = CheckInSchedule.FormatDays(days);
+        }
+        else
+        {
+            problems.Add("Pick at least one check-in day, like Mon,Tue,Wed,Thu,Fri.");
+        }
+
+        if (CheckInSchedule.TryParseDay(WeeklyDayBox.Text, out var weekly))
+        {
+            s.WeeklyReminderDay = CheckInSchedule.FormatDays(new[] { weekly });
+        }
+        else
+        {
+            problems.Add("The weekly reminder day must be like Fri.");
+        }
+
+        if (CheckInSchedule.TryParseTime(WeeklyTimeBox.Text, out var wt))
+        {
+            s.WeeklyReminderTime = wt.ToString(@"hh\:mm");
+        }
+        else
+        {
+            problems.Add("The weekly reminder time must look like 17:00.");
+        }
+
+        var url = KekaUrlBox.Text.Trim();
+        if (url.Length == 0 || KekaResult.ValidateUrl(url) is null)
+        {
+            s.KekaUrl = url;
+        }
+        else
+        {
+            problems.Add(KekaResult.ValidateUrl(url)!);
+        }
+
+        _saveTimesheet?.Invoke();
+        TimesheetNote.Text = string.Join(" ", problems);
+        TimesheetNote.Visibility = problems.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        // Show what was actually kept (a bad entry snaps back to the last good value).
+        _timesheet = null;
+        CheckInTimeBox.Text = s.CheckInTime;
+        CheckInDaysBox.Text = s.CheckInDays;
+        WeeklyDayBox.Text = s.WeeklyReminderDay;
+        WeeklyTimeBox.Text = s.WeeklyReminderTime;
+        KekaUrlBox.Text = s.KekaUrl;
+        _timesheet = s;
+    }
+
+    private void OnCheckInNow(object sender, RoutedEventArgs e) => CheckInNowRequested?.Invoke();
+
+    private void OnKekaSignIn(object sender, RoutedEventArgs e) => KekaSignInRequested?.Invoke();
+
     internal void Attach(StatusSet statuses, TagSet tags, UpdateService updates, bool alwaysOnTop, bool statusReminder, bool launchAtSignIn)
     {
         TagsEditor.Attach(tags);
@@ -231,6 +332,7 @@ public sealed partial class SettingsView : UserControl
         {
             "general" => SecGeneral,
             "tasks" => SecTasks,
+            "timesheet" => SecTimesheet,
             "agents" => SecAgents,
             _ => SecUpdates,
         };

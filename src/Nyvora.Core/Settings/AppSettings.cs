@@ -39,6 +39,34 @@ public sealed class AppSettings
     /// <summary>User-defined tags (name and color). Validated by <see cref="TagSet"/>.</summary>
     public List<TagDef> Tags { get; set; } = new();
 
+    /// <summary>Open a small form every day to note what you did (project, task, hours, comment).</summary>
+    public bool CheckInEnabled { get; set; } = true;
+
+    public string CheckInTime { get; set; } = Timesheet.CheckInSchedule.DefaultTime;
+
+    /// <summary>Days of the check-in, like "Mon,Tue,Wed,Thu,Fri".</summary>
+    public string CheckInDays { get; set; } = Timesheet.CheckInSchedule.DefaultDays;
+
+    /// <summary>Remind me once a week to submit the Keka timesheet. Nyvora never submits it.</summary>
+    public bool WeeklyReminderEnabled { get; set; } = true;
+
+    public string WeeklyReminderDay { get; set; } = Timesheet.CheckInSchedule.DefaultWeeklyDay;
+
+    public string WeeklyReminderTime { get; set; } = Timesheet.CheckInSchedule.DefaultWeeklyTime;
+
+    /// <summary>The Keka page where the timesheet is filled. Empty until you set it; change it here if Keka moves it.</summary>
+    public string KekaUrl { get; set; } = "";
+
+    /// <summary>
+    /// After filling an entry, also press Save on it. Off by default: the Edge window stays open so you can check it and
+    /// press Save yourself. Nyvora never presses Submit.
+    /// </summary>
+    public bool KekaPressSave { get; set; }
+
+    public DateOnly? LastCheckInPrompt { get; set; }
+
+    public DateOnly? LastWeeklyReminder { get; set; }
+
     public DateTimeOffset? LastUpdateCheck { get; set; }
 
     public bool IsUpdateCheckDue(DateTimeOffset now) =>

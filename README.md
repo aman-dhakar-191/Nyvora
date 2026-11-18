@@ -82,6 +82,25 @@ The pill shows what is due and how many tasks are open. It can also show a **tem
 - **From an AI agent:** the MCP server has `set_notch_message` (text up to 40 characters, optional `tone`, optional `minutes` or `seconds`; with no time it shows for 5 seconds and goes away, and `keep=true` keeps it until cleared), `clear_notch_message` and `get_notch_message`. The two that change the notch need `--allow-write`, like the task tools.
 - It is stored in `notch.json` next to your tasks, and the running app picks changes up within a second.
 
+## Daily check-in and Keka timesheet
+Nyvora can ask once a day what you did (project, task, hours, comment) and keep it in `checkins.json`. A weekly reminder
+(default Friday 17:00) tells you to submit your timesheet. **Nyvora never submits it.** Everything is under Settings →
+Timesheet: the check-in time and days (default 18:00, Mon-Fri), the reminder day and time, and the Keka timesheet address.
+A check-in missed while the PC was off appears at the next start (once per day; "Not now" waits until tomorrow).
+
+"Save and fill Keka" runs `keka\keka_fill.py` (shipped beside the app) with Python and the Edge you already have. It
+needs `pip install playwright` (no browser download). It uses its own Edge profile (in `%LOCALAPPDATA%\Nyvora\keka`), so
+you sign in once with Settings → Sign in to Keka. The notch tells you what happened:
+
+| Notch | Meaning |
+|---|---|
+| Keka filled: review and submit | The entry was filled. By default the Edge window stays open for you to check and press Save. |
+| Keka: sign in needed | The page showed a login. Use Settings → Sign in to Keka, then fill again. |
+| Keka: page changed, see log | A field was not found. `keka.log` and `keka-last.png` (in `%LOCALAPPDATA%\Nyvora\keka`) list what was on the page. Field names are in `keka\keka_fields.json`. |
+| Keka: Python not found / install playwright (pip) | Install Python, then `pip install playwright`. |
+
+The address is a setting, so if Keka moves the page you change it there. Nothing about your Keka login is stored by Nyvora.
+
 ## Keyboard
 
 | Keys | Does |

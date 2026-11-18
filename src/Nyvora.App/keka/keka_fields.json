@@ -1,0 +1,9 @@
+{
+  "_note": "Names of the fields on your Keka timesheet page, tried in order. Edit these if Keka labels them differently.",
+  "project": ["Project"],
+  "task": ["Task"],
+  "hours": ["Hours", "Time", "Duration", "Effort"],
+  "comment": ["Comment", "Comments", "Notes", "Description", "Remarks"],
+  "save_buttons": ["Save", "Add", "Add entry"],
+  "never_click": ["Submit", "Approve", "Send for approval", "Send"]
+}

@@ -24,6 +24,7 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
             <ui:HandButton Content="General" Tag="general" Click="OnNav" Padding="10,3" FontSize="12" />
             <ui:HandButton Content="Tasks" Tag="tasks" Click="OnNav" Padding="10,3" FontSize="12" />
+            <ui:HandButton Content="Timesheet" Tag="timesheet" Click="OnNav" Padding="10,3" FontSize="12" />
             <ui:HandButton Content="AI agents" Tag="agents" Click="OnNav" Padding="10,3" FontSize="12" />
             <ui:HandButton Content="Updates" Tag="updates" Click="OnNav" Padding="10,3" FontSize="12" />
         </StackPanel>
@@ -68,6 +69,44 @@
                             <TextBlock Text="Statuses" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" />
                             <ui:StatusSettingsView x:Name="Statuses" />
                         </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="SecTimesheet" CornerRadius="10" Background="#0DFFFFFF" Padding="16,14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Timesheet (Keka)" FontSize="14" FontWeight="SemiBold" Foreground="#FFF4F4F8" />
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Nyvora asks what you did each day and can fill it into your Keka timesheet. It never submits: you submit it yourself, and a weekly reminder tells you when." />
+                        <ui:HandCheckBox x:Name="CheckInToggle" Content="Open a daily check-in" MinWidth="0" Click="OnTimesheetChanged" />
+                        <Grid ColumnSpacing="8" Margin="28,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="CheckInTimeBox" Header="Time" Width="90" LostFocus="OnTimesheetChanged" />
+                            <TextBox x:Name="CheckInDaysBox" Header="Days" Grid.Column="1" LostFocus="OnTimesheetChanged" />
+                        </Grid>
+                        <ui:HandCheckBox x:Name="WeeklyToggle" Content="Remind me weekly to submit the timesheet" MinWidth="0" Click="OnTimesheetChanged" />
+                        <Grid ColumnSpacing="8" Margin="28,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="WeeklyDayBox" Header="Day" Width="90" LostFocus="OnTimesheetChanged" />
+                            <TextBox x:Name="WeeklyTimeBox" Header="Time" Width="90" Grid.Column="1" LostFocus="OnTimesheetChanged" />
+                        </Grid>
+                        <TextBox x:Name="KekaUrlBox" Header="Keka timesheet address" PlaceholderText="https://yourcompany.keka.com/..."
+                                 LostFocus="OnTimesheetChanged" />
+                        <ui:HandCheckBox x:Name="KekaSaveToggle" MinWidth="0" Click="OnTimesheetChanged"
+                                         Content="Also press Save on the entry (otherwise Edge stays open for you to check and save)" />
+                        <TextBlock x:Name="TimesheetNote" FontSize="12" Foreground="#FFFB7185" TextWrapping="Wrap" Visibility="Collapsed" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ui:HandButton Content="Check in now" Click="OnCheckInNow" />
+                            <ui:HandButton Content="Sign in to Keka" Click="OnKekaSignIn"
+                                           ToolTipService.ToolTip="Opens Edge so you can sign in once. Later fills reuse it." />
+                        </StackPanel>
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Needs Python and 'pip install playwright' on this PC. Uses the Microsoft Edge you already have, with its own saved sign-in (not your normal profile)." />
                     </StackPanel>
                 </Border>
 
