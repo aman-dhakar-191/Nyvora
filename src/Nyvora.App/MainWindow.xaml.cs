@@ -450,8 +450,7 @@ public sealed partial class MainWindow : Window
 
         var cfg = _settings.Current;
         var today = DateOnly.FromDateTime(DateTime.Now);
-        var canFill = KekaReady(cfg);
-        var window = new CheckInWindow(today, _checkIns.Get(today), cfg.KekaDailyHours, canFill, (entry, fill) =>
+                var window = new CheckInWindow(today, _checkIns.Get(today), cfg.KekaDailyHours, KekaMissing(cfg), (entry, fill) =>
         {
             entry.Project = cfg.KekaProject; // fixed in Settings; kept in the file so it shows what was filled
             entry.Task = cfg.KekaWorkItem;
@@ -472,6 +471,28 @@ public sealed partial class MainWindow : Window
         _checkInWindow = window;
         window.Activate();
         Log.Info(manual ? "Check-in opened from Settings" : "Check-in opened");
+    }
+
+    /// <summary>What is still missing before Keka can be filled (null when nothing).</summary>
+    private static string? KekaMissing(AppSettings s)
+    {
+        var missing = new List<string>();
+        if (KekaResult.ValidateUrl(s.KekaUrl) is not null)
+        {
+            missing.Add("the timesheet address");
+        }
+
+        if (string.IsNullOrWhiteSpace(s.KekaProject))
+        {
+            missing.Add("the project");
+        }
+
+        if (string.IsNullOrWhiteSpace(s.KekaWorkItem))
+        {
+            missing.Add("the work item");
+        }
+
+        return missing.Count == 0 ? null : "set " + string.Join(", ", missing) + " in Settings > Timesheet, then open this form again.";
     }
 
     /// <summary>The address, project and work item are all needed to fill the page.</summary>

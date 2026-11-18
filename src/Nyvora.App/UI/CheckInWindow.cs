@@ -12,21 +12,22 @@ namespace Nyvora.App.UI;
 /// </summary>
 internal sealed class CheckInWindow : Window
 {
-    private readonly TextBox _hours = new() { Header = "Hours (fixed in Settings; change it for a short day)", PlaceholderText = "8", Width = 120, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly TextBox _hours = new() { Header = "Hours", PlaceholderText = "8", Width = 160, FontSize = 16, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _comment = new()
     {
-        Header = "What did you do? (this is the task and the comment in Keka)",
+        Header = "What did you do? It becomes the task and the comment in Keka.",
+        FontSize = 16,
         PlaceholderText = "What did you do?",
         AcceptsReturn = true,
         TextWrapping = TextWrapping.Wrap,
-        MinHeight = 160,
+        MinHeight = 240,
     };
 
     private readonly TextBlock _problem = new() { TextWrapping = TextWrapping.Wrap, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)), Visibility = Visibility.Collapsed };
     private readonly DateOnly _date;
     private readonly Func<CheckInEntry, bool, string?> _submit;
 
-    public CheckInWindow(DateOnly date, CheckInEntry? today, double defaultHours, bool canFill, Func<CheckInEntry, bool, string?> submit)
+    public CheckInWindow(DateOnly date, CheckInEntry? today, double defaultHours, string? cannotFillBecause, Func<CheckInEntry, bool, string?> submit)
     {
         _date = date;
         _submit = submit;
@@ -36,28 +37,26 @@ internal sealed class CheckInWindow : Window
         _hours.Text = (today?.Hours ?? defaultHours).ToString("0.##", CultureInfo.InvariantCulture);
         _comment.Text = today?.Comment ?? "";
 
-        var save = new Button { Content = "Save", MinWidth = 80 };
+        var canFill = cannotFillBecause is null;
+        var big = new Thickness(22, 10, 22, 10);
+        var save = new Button { Content = "Save", MinWidth = 90, Padding = big, FontSize = 16 };
         save.Click += (_, _) => Submit(fill: false);
-        var fill = new Button { Content = "Save and fill Keka", IsEnabled = canFill };
-        if (!canFill)
-        {
-            ToolTipService.SetToolTip(fill, "Set the Keka address, project and work item in Settings first");
-        }
+        var fill = new Button { Content = "Save and fill Keka", IsEnabled = canFill, Padding = big, FontSize = 16 };
 
         fill.Click += (_, _) => Submit(fill: true);
-        var later = new Button { Content = "Not now" };
+        var later = new Button { Content = "Not now", Padding = big, FontSize = 16 };
         later.Click += (_, _) => Close();
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         buttons.Children.Add(save);
         buttons.Children.Add(fill);
         buttons.Children.Add(later);
 
-        var panel = new StackPanel { Spacing = 12, Padding = new Thickness(24) };
+        var panel = new StackPanel { Spacing = 16, Padding = new Thickness(36, 30, 36, 30) };
         panel.Children.Add(new TextBlock
         {
             Text = $"What did you do on {date.ToString("dddd, d MMMM", CultureInfo.CurrentCulture)}?",
-            FontSize = 18,
+            FontSize = 24,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -65,6 +64,16 @@ internal sealed class CheckInWindow : Window
         panel.Children.Add(_hours);
         panel.Children.Add(_problem);
         panel.Children.Add(buttons);
+        if (cannotFillBecause is not null)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "To fill Keka: " + cannotFillBecause,
+                FontSize = 14,
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.7,
+            });
+        }
 
         Content = new ScrollViewer
         {
@@ -73,10 +82,13 @@ internal sealed class CheckInWindow : Window
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x1B, 0x1B, 0x22)),
         };
 
-        const int width = 520;
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(width, 520));
+        // Size in device-independent units (so it is the same size on a scaled display), centred on the screen.
+        var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         var work = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        AppWindow.Move(new Windows.Graphics.PointInt32(work.X + Math.Max(0, (work.Width - width) / 2), work.Y + 80)); // under the notch
+        var w = Math.Min((int)(700 * scale), work.Width - 40);
+        var h = Math.Min((int)(720 * scale), work.Height - 40);
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(w, h));
+        AppWindow.Move(new Windows.Graphics.PointInt32(work.X + (work.Width - w) / 2, work.Y + (work.Height - h) / 2));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsAlwaysOnTop = true; // so it is seen even when another app is in front
@@ -84,6 +96,9 @@ internal sealed class CheckInWindow : Window
             presenter.IsMinimizable = false;
         }
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     private void Submit(bool fill)
     {
