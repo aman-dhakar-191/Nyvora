@@ -135,7 +135,7 @@ def changed(page, log, args, why):
     return finish(CHANGED, log, f"Screenshot: {shot}")
 
 
-def fill_day(page, entry, fields, args, log):
+def fill_day(page, entry, fields, args, log, quiet=False):
     date = datetime.date.fromisoformat(entry["date"])
     project, item = entry.get("project", ""), entry.get("task", "")
     if not project or not item:
@@ -188,6 +188,12 @@ def fill_day(page, entry, fields, args, log):
     time.sleep(0.5)
 
     if not args.save:
+        # No Save pressed: leave the window open (this run is not headless) so you can check it and press Save yourself.
+        print("RESULT 0", flush=True)
+        try:
+            page.context.wait_for_event("close", timeout=30 * 60 * 1000)
+        except Exception:
+            pass
         return OK
 
     name = fields["save_button"]
@@ -206,6 +212,79 @@ def fill_day(page, entry, fields, args, log):
     return OK
 
 
+def launch(p, args, headless):
+    kw = dict(channel="msedge", headless=headless, args=["--no-first-run"])
+    if args.browser_path:  # tests only
+        kw = dict(executable_path=args.browser_path, headless=headless, args=["--no-sandbox"])
+    if not headless:
+        kw["no_viewport"] = True
+    ctx = p.chromium.launch_persistent_context(args.profile, **kw)
+    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+    page.set_default_timeout(10000)
+    page.goto(args.url, wait_until="domcontentloaded", timeout=45000)
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except Exception:
+        pass
+    time.sleep(2)  # the page is a single-page app: give it a moment to draw
+    return ctx, page
+
+
+def wait_for_sign_in(page, host, log):
+    log("Waiting for you to sign in (up to 10 minutes)...")
+    end = time.time() + 600
+    while time.time() < end:
+        if not signed_out(page, host):
+            time.sleep(2)  # let the session cookies settle
+            return True
+        time.sleep(2)
+    return False
+
+
+def attempt(p, args, fields, entry, host, log, headless):
+    """One fill. Returns OK, SIGN_IN, CHANGED or FAILED (never raises)."""
+    ctx = None
+    try:
+        ctx, page = launch(p, args, headless)
+        if signed_out(page, host):
+            log(f"Not signed in (landed on {page.url}).")
+            return SIGN_IN
+        log(f"On {page.url}; filling {entry.get('date')}")
+        return fill_day(page, entry, fields, args, log, quiet=True)
+    except Exception as ex:  # Edge missing, profile in use, ...
+        log(f"{type(ex).__name__}: {ex}")
+        return FAILED
+    finally:
+        if ctx is not None:
+            try:
+                ctx.close()
+            except Exception:
+                pass
+
+
+def show_window(p, args, log, sign_in_host=None):
+    """Open a visible Edge window on the page. With a host: wait for the sign in and say whether it happened."""
+    ctx = None
+    try:
+        ctx, page = launch(p, args, headless=False)
+        if sign_in_host:
+            return wait_for_sign_in(page, sign_in_host, log)
+        try:  # leave it open so you can look, sign in or fix things yourself
+            ctx.wait_for_event("close", timeout=30 * 60 * 1000)
+        except Exception:
+            pass
+        return True
+    except Exception as ex:
+        log(f"Could not open a window: {type(ex).__name__}: {ex}")
+        return False
+    finally:
+        if ctx is not None:
+            try:
+                ctx.close()
+            except Exception:
+                pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", required=True)
@@ -213,7 +292,8 @@ def main():
     ap.add_argument("--log-dir", required=True)
     ap.add_argument("--entry")
     ap.add_argument("--login", action="store_true", help="open Edge so you can sign in, then stop")
-    ap.add_argument("--save", action="store_true", help="also press Save (a draft; never Submit)")
+    ap.add_argument("--save", action="store_true", help="also press Save (a draft; never Submit). Without it the window stays open.")
+    ap.add_argument("--browser-path", help=argparse.SUPPRESS)
     args = ap.parse_args()
     log = Log(args.log_dir)
 
@@ -225,52 +305,31 @@ def main():
     host = urlparse(args.url).hostname
     fields = json.loads(pathlib.Path(__file__).with_name("keka_fields.json").read_text(encoding="utf-8"))
     entry = json.loads(pathlib.Path(args.entry).read_text(encoding="utf-8")) if args.entry else {}
-    entry = {str(k).lower(): v for k, v in entry.items()}  # the app writes Date/Hours/...; accept any casing
+    entry = {str(k).lower(): v for k, v in entry.items()}  # the app writes lower-case names; accept any casing
 
     try:
         with sync_playwright() as p:
-            ctx = p.chromium.launch_persistent_context(
-                args.profile, channel="msedge", headless=False, no_viewport=True, args=["--no-first-run"])
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.set_default_timeout(10000)
-            try:
-                page.goto(args.url, wait_until="domcontentloaded", timeout=45000)
-                try:
-                    page.wait_for_load_state("networkidle", timeout=15000)
-                except Exception:
-                    pass
-                time.sleep(2)  # the page is a single-page app: give it a moment to draw
+            if args.login:
+                return finish(OK if show_window(p, args, log, host) else SIGN_IN, log,
+                              "Sign in finished.")
 
-                if args.login:
-                    log("Waiting for you to sign in (up to 10 minutes)...")
-                    end = time.time() + 600
-                    while time.time() < end:
-                        if not signed_out(page, host):
-                            time.sleep(2)  # let the session cookies settle
-                            return finish(OK, log, "Signed in. The session is saved.")
-                        time.sleep(2)
-                    return finish(SIGN_IN, log, "Timed out waiting for sign in.")
+            # Quietly in the background when it saves by itself; with a window when you asked to review and press Save.
+            code = attempt(p, args, fields, entry, host, log, headless=args.save)
 
-                if signed_out(page, host):
-                    return finish(SIGN_IN, log, f"Not signed in (landed on {page.url}).")
+            if code == SIGN_IN:
+                log("Signed out: opening a window so you can sign in, then trying again.")
+                if show_window(p, args, log, host):
+                    code = attempt(p, args, fields, entry, host, log, headless=args.save)
 
-                log(f"On {page.url}; filling {entry.get('date')}")
-                code = fill_day(page, entry, fields, args, log)
-                if code != OK:
-                    return code  # fill_day already reported it
-                result = finish(OK, log, "Filled. Nyvora never submits the week: do that yourself when it is ready.")
-                if not args.save:
-                    try:  # no Save was pressed: keep the window open so you can check it and press Save yourself
-                        ctx.wait_for_event("close", timeout=30 * 60 * 1000)
-                    except Exception:
-                        pass
-                return result
-            finally:
-                try:
-                    ctx.close()
-                except Exception:
-                    pass
-    except Exception as ex:  # Edge missing, profile in use, window closed by hand, ...
+            if code == OK:
+                return finish(OK, log, "Filled. Nyvora never submits the week: do that yourself when it is ready.")
+
+            # Something is wrong: say so first, then open a window on the page so you can see it.
+            result = finish(code, log, "Something went wrong; opening a window on the page.")
+            if code in (CHANGED, FAILED, SIGN_IN):
+                show_window(p, args, log)
+            return result
+    except Exception as ex:
         return finish(FAILED, log, f"{type(ex).__name__}: {ex}")
 
 
