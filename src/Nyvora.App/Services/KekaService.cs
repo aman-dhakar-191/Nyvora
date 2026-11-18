@@ -24,7 +24,7 @@ internal static class KekaService
         {
             Directory.CreateDirectory(WorkDir);
             var entryPath = Path.Combine(WorkDir, "entry.json");
-            File.WriteAllText(entryPath, JsonSerializer.Serialize(entry));
+            File.WriteAllText(entryPath, JsonSerializer.Serialize(entry, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
             var args = Common(url);
             args.AddRange(new[] { "--entry", entryPath });
             if (save)

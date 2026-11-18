@@ -225,6 +225,7 @@ def main():
     host = urlparse(args.url).hostname
     fields = json.loads(pathlib.Path(__file__).with_name("keka_fields.json").read_text(encoding="utf-8"))
     entry = json.loads(pathlib.Path(args.entry).read_text(encoding="utf-8")) if args.entry else {}
+    entry = {str(k).lower(): v for k, v in entry.items()}  # the app writes Date/Hours/...; accept any casing
 
     try:
         with sync_playwright() as p:
