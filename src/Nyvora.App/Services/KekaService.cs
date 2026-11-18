@@ -18,7 +18,7 @@ internal static class KekaService
 
     private static string ProfileDir => Path.Combine(WorkDir, "edge-profile");
 
-    public static Task<KekaOutcome> FillAsync(CheckInEntry entry, string url, bool save)
+    public static Task<KekaOutcome> FillAsync(CheckInEntry entry, string url, bool save, Action? onSetup = null)
     {
         try
         {
@@ -32,7 +32,7 @@ internal static class KekaService
                 args.Add("--save");
             }
 
-            return RunAsync(args, TimeSpan.FromMinutes(5));
+            return RunAsync(args, TimeSpan.FromMinutes(5), onSetup);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -41,17 +41,123 @@ internal static class KekaService
         }
     }
 
-    public static Task<KekaOutcome> SignInAsync(string url)
+    public static Task<KekaOutcome> SignInAsync(string url, Action? onSetup = null)
     {
         var args = Common(url);
         args.Add("--login");
-        return RunAsync(args, TimeSpan.FromMinutes(11));
+        return RunAsync(args, TimeSpan.FromMinutes(11), onSetup);
     }
 
     private static List<string> Common(string url) =>
         new() { "--url", url.Trim(), "--profile", ProfileDir, "--log-dir", WorkDir };
 
-    private static async Task<KekaOutcome> RunAsync(List<string> args, TimeSpan limit)
+    private static string VenvDir => Path.Combine(WorkDir, "venv");
+
+    private static string VenvPython => Path.Combine(VenvDir, "Scripts", "python.exe");
+
+    private static string ReadyMarker => Path.Combine(VenvDir, ".playwright-ready");
+
+    /// <summary>
+    /// Nyvora keeps its own Python environment for this (so nothing has to be installed globally): it is created once from
+    /// whatever Python is on the PC and Playwright is installed into it. Null when ready, otherwise why not.
+    /// </summary>
+    private static async Task<KekaOutcome?> EnsureEnvironmentAsync(Action? onSetup)
+    {
+        if (File.Exists(VenvPython) && File.Exists(ReadyMarker))
+        {
+            return null;
+        }
+
+        onSetup?.Invoke();
+        Directory.CreateDirectory(WorkDir);
+        if (!File.Exists(VenvPython))
+        {
+            // The Python launcher first; plain "python" second (it may be the Microsoft Store stub, which exits with 9009).
+            var made = false;
+            foreach (var (exe, first) in new[] { ("py", "-3"), ("python", "") })
+            {
+                var args = first.Length > 0 ? new[] { first, "-m", "venv", VenvDir } : new[] { "-m", "venv", VenvDir };
+                var code = await RunPlainAsync(exe, args, TimeSpan.FromMinutes(3));
+                if (code == 0 && File.Exists(VenvPython))
+                {
+                    made = true;
+                    break;
+                }
+            }
+
+            if (!made)
+            {
+                return KekaOutcome.PythonMissing;
+            }
+        }
+
+        var pip = await RunPlainAsync(VenvPython, new[] { "-m", "pip", "install", "--disable-pip-version-check", "playwright" }, TimeSpan.FromMinutes(6));
+        if (pip != 0)
+        {
+            return KekaOutcome.PlaywrightMissing;
+        }
+
+        File.WriteAllText(ReadyMarker, DateTimeOffset.Now.ToString("o"));
+        return null;
+    }
+
+    /// <summary>Runs a command to the end and logs what it printed. -1 when it could not start or timed out.</summary>
+    private static async Task<int> RunPlainAsync(string exe, string[] args, TimeSpan limit)
+    {
+        var psi = new ProcessStartInfo(exe)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var a in args)
+        {
+            psi.ArgumentList.Add(a);
+        }
+
+        try
+        {
+            using var proc = Process.Start(psi);
+            if (proc is null)
+            {
+                return -1;
+            }
+
+            var output = proc.StandardOutput.ReadToEndAsync();
+            var errors = proc.StandardError.ReadToEndAsync();
+            using var cts = new CancellationTokenSource(limit);
+            try
+            {
+                await proc.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try
+                {
+                    proc.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // already gone
+                }
+
+                Log.Error($"{exe} {string.Join(' ', args)} timed out");
+                return -1;
+            }
+
+            var text = ((await output) + "\n" + (await errors)).Trim();
+            var tail = string.Join(" | ", text.Split('\n').TakeLast(6).Select(l => l.Trim()).Where(l => l.Length > 0));
+            Log.Info($"keka setup: {exe} {string.Join(' ', args)} -> {proc.ExitCode} {tail}");
+            return proc.ExitCode is 9009 or 103 ? -1 : proc.ExitCode;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return -1; // not installed
+        }
+    }
+
+    private static async Task<KekaOutcome> RunAsync(List<string> args, TimeSpan limit, Action? onSetup)
     {
         if (!File.Exists(ScriptPath))
         {
@@ -59,52 +165,34 @@ internal static class KekaService
             return KekaOutcome.Failed;
         }
 
-        // The Python launcher first; plain "python" second (it may be the Microsoft Store stub, which exits with 9009).
-        foreach (var (exe, first) in new[] { ("py", "-3"), ("python", "") })
+        if (await EnsureEnvironmentAsync(onSetup) is { } problem)
         {
-            var psi = new ProcessStartInfo(exe)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            if (first.Length > 0)
-            {
-                psi.ArgumentList.Add(first);
-            }
-
-            psi.ArgumentList.Add(ScriptPath);
-            foreach (var a in args)
-            {
-                psi.ArgumentList.Add(a);
-            }
-
-            Process? proc;
-            try
-            {
-                proc = Process.Start(psi);
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                continue; // that launcher is not installed
-            }
-
-            if (proc is null)
-            {
-                continue;
-            }
-
-            var outcome = await WaitAsync(proc, limit);
-            if (outcome == KekaOutcome.PythonMissing)
-            {
-                continue;
-            }
-
-            return outcome;
+            return problem;
         }
 
-        return KekaOutcome.PythonMissing;
+        var psi = new ProcessStartInfo(VenvPython)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        psi.ArgumentList.Add(ScriptPath);
+        foreach (var a in args)
+        {
+            psi.ArgumentList.Add(a);
+        }
+
+        try
+        {
+            var proc = Process.Start(psi);
+            return proc is null ? KekaOutcome.Failed : await WaitAsync(proc, limit);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Error("Could not start the Keka script", ex);
+            return KekaOutcome.Failed;
+        }
     }
 
     private static async Task<KekaOutcome> WaitAsync(Process proc, TimeSpan limit)
@@ -155,7 +243,7 @@ internal static class KekaService
         }
 
         var code = done.Task.Result;
-        return code is 9009 or 103 ? KekaOutcome.PythonMissing : KekaResult.FromExitCode(code);
+        return KekaResult.FromExitCode(code);
     }
 
     private static int SafeExitCode(Process p)

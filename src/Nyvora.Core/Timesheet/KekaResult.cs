@@ -30,7 +30,7 @@ public static class KekaResult
         KekaOutcome.SignInNeeded => new NotchMessage { Text = "Keka: sign in needed", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
         KekaOutcome.PageChanged => new NotchMessage { Text = "Keka: page changed, see log", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
         KekaOutcome.PythonMissing => new NotchMessage { Text = "Keka: Python not found", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
-        KekaOutcome.PlaywrightMissing => new NotchMessage { Text = "Keka: install playwright (pip)", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
+        KekaOutcome.PlaywrightMissing => new NotchMessage { Text = "Keka: setup failed, see log", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
         _ => new NotchMessage { Text = "Keka: could not fill, see log", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
     };
 

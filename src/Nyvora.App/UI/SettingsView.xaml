@@ -106,7 +106,7 @@
                                            ToolTipService.ToolTip="Opens Edge so you can sign in once. Later fills reuse it." />
                         </StackPanel>
                         <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
-                                   Text="Needs Python and 'pip install playwright' on this PC. Uses the Microsoft Edge you already have, with its own saved sign-in (not your normal profile)." />
+                                   Text="Needs Python on this PC. The first use installs what it needs into Nyvora's own folder (about a minute). Uses the Microsoft Edge you already have, with its own saved sign-in (not your normal profile)." />
                     </StackPanel>
                 </Border>
 

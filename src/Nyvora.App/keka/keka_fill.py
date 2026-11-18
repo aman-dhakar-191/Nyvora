@@ -9,7 +9,7 @@ Exit codes (Nyvora reads these):
   0  done            10  sign in needed      11  page changed (a field was not found)
   13 something else  14  playwright is not installed (pip install playwright)
 
-Needs:  pip install playwright     (no browser download: it uses Edge)
+Needs the playwright package. Nyvora installs it into its own Python environment the first time (no browser download: it uses Edge).
 """
 import argparse
 import datetime
@@ -115,7 +115,7 @@ def main():
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        return finish(NO_PLAYWRIGHT, log, "playwright is not installed. Run: pip install playwright")
+        return finish(NO_PLAYWRIGHT, log, "playwright is not installed in this Python. (Nyvora normally sets this up itself.)")
 
     host = urlparse(args.url).hostname
     fields = json.loads((pathlib.Path(__file__).with_name("keka_fields.json")).read_text(encoding="utf-8"))

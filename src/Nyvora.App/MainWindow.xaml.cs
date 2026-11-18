@@ -485,7 +485,7 @@ public sealed partial class MainWindow : Window
         {
             _kekaNote = KekaResult.Running();
             UpdateBadge();
-            var outcome = await KekaService.FillAsync(entry, _settings.Current.KekaUrl, _settings.Current.KekaPressSave);
+            var outcome = await KekaService.FillAsync(entry, _settings.Current.KekaUrl, _settings.Current.KekaPressSave, ShowKekaSetup);
             Log.Info($"Keka fill finished: {outcome}");
             if (outcome == KekaOutcome.Filled)
             {
@@ -504,6 +504,13 @@ public sealed partial class MainWindow : Window
             _kekaBusy = false;
             UpdateBadge();
         }
+    }
+
+    /// <summary>The first run installs Playwright into Nyvora's own Python environment; say so, it takes a minute.</summary>
+    private void ShowKekaSetup()
+    {
+        _kekaNote = new NotchMessage { Text = "Keka: first-time setup…", Tone = NotchTone.Info };
+        UpdateBadge();
     }
 
     private async Task SignInToKekaAsync()
@@ -526,7 +533,7 @@ public sealed partial class MainWindow : Window
         {
             _kekaNote = new NotchMessage { Text = "Keka: sign in in the Edge window", Tone = NotchTone.Info };
             UpdateBadge();
-            var outcome = await KekaService.SignInAsync(_settings.Current.KekaUrl);
+            var outcome = await KekaService.SignInAsync(_settings.Current.KekaUrl, ShowKekaSetup);
             Log.Info($"Keka sign-in finished: {outcome}");
             _kekaNote = outcome == KekaOutcome.Filled
                 ? new NotchMessage { Text = "Keka: signed in", Tone = NotchTone.Success, ExpiresAt = DateTimeOffset.Now.AddSeconds(10) }

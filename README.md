@@ -89,7 +89,8 @@ Timesheet: the check-in time and days (default 18:00, Mon-Fri), the reminder day
 A check-in missed while the PC was off appears at the next start (once per day; "Not now" waits until tomorrow).
 
 "Save and fill Keka" runs `keka\keka_fill.py` (shipped beside the app) with Python and the Edge you already have. It
-needs `pip install playwright` (no browser download). It uses its own Edge profile (in `%LOCALAPPDATA%\Nyvora\keka`), so
+needs Python on the PC; the first run creates a private environment in `%LOCALAPPDATA%\Nyvora\keka\venv` and installs
+Playwright there (no global install, no browser download). It uses its own Edge profile (in `%LOCALAPPDATA%\Nyvora\keka`), so
 you sign in once with Settings → Sign in to Keka. The notch tells you what happened:
 
 | Notch | Meaning |
@@ -97,7 +98,8 @@ you sign in once with Settings → Sign in to Keka. The notch tells you what hap
 | Keka filled: review and submit | The entry was filled. By default the Edge window stays open for you to check and press Save. |
 | Keka: sign in needed | The page showed a login. Use Settings → Sign in to Keka, then fill again. |
 | Keka: page changed, see log | A field was not found. `keka.log` and `keka-last.png` (in `%LOCALAPPDATA%\Nyvora\keka`) list what was on the page. Field names are in `keka\keka_fields.json`. |
-| Keka: Python not found / install playwright (pip) | Install Python, then `pip install playwright`. |
+| Keka: Python not found | Install Python from python.org (or the Microsoft Store). |
+| Keka: setup failed, see log | The automatic install failed (offline or blocked); see `nyvora.log`. |
 
 The address is a setting, so if Keka moves the page you change it there. Nothing about your Keka login is stored by Nyvora.
 
