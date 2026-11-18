@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Fills one day's entry on your Keka timesheet page. It NEVER submits the timesheet.
+Fills one day on your Keka "All Timesheets" page (the weekly grid). It NEVER submits the week.
 
-It drives the Microsoft Edge you already have installed, with its own saved profile (kept in Nyvora's data folder), so
-you sign in once and later runs reuse it. If anything is unexpected it stops and says why instead of guessing.
+What it does, the way you do it by hand:
+  1. opens the timesheet address (Edge, with its own saved sign-in),
+  2. adds the project / work item row with "+ Add Time Entry" if this week does not have it yet,
+  3. types the hours in that day's cell and the comment (Keka requires one),
+  4. presses Save (only with --save) and waits for "Timesheet saved successfully".
+"Submit weekly timesheet" is never clicked.
 
 Exit codes (Nyvora reads these):
-  0  done            10  sign in needed      11  page changed (a field was not found)
-  13 something else  14  playwright is not installed (pip install playwright)
+  0  done            10  sign in needed      11  page changed (something was not found)
+  13 something else  14  playwright is not installed
 
 Needs the playwright package. Nyvora installs it into its own Python environment the first time (no browser download: it uses Edge).
 """
@@ -15,12 +19,15 @@ import argparse
 import datetime
 import json
 import pathlib
+import re
 import sys
 import time
 from urllib.parse import urlparse
 
 OK, SIGN_IN, CHANGED, FAILED, NO_PLAYWRIGHT = 0, 10, 11, 13, 14
 SIGNED_OUT_WORDS = ("login", "signin", "sign-in", "microsoftonline", "accounts.google", "okta", "/auth", "sso")
+MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
 
 class Log:
@@ -55,38 +62,52 @@ def signed_out(page, host):
         return False
 
 
-def find(page, names, kinds=("textbox", "combobox", "spinbutton")):
-    """First visible control whose label, placeholder or accessible name contains one of the names."""
-    for name in names:
-        candidates = [page.get_by_label(name, exact=False), page.get_by_placeholder(name, exact=False)]
-        candidates += [page.get_by_role(k, name=name) for k in kinds]
-        for c in candidates:
-            try:
-                if c.count() and c.first.is_visible():
-                    return c.first
-            except Exception:
+def hours_text(hours):
+    """8 -> '8', 7.5 -> '7:30' (Keka shows hours as H:MM)."""
+    h = float(hours)
+    whole, minutes = int(h), int(round((h - int(h)) * 60))
+    return str(whole) if minutes == 0 else f"{whole}:{minutes:02d}"
+
+
+def day_header(page, date):
+    """The column header cell for the date ('18 NOV' over 'WED'): the smallest visible element holding both."""
+    # No word boundary after the month: the date and the weekday can run together in the page text ("18 NOVWED").
+    pattern = re.compile(rf"(?<!\d)0?{date.day}\s*{MONTHS[date.month - 1]}", re.I)
+    cells = page.locator("div,th,td,span,p").filter(has_text=pattern).filter(has_text=re.compile(WEEKDAYS[date.weekday()], re.I))
+    best = None
+    for i in range(min(cells.count(), 150)):
+        el = cells.nth(i)
+        try:
+            if not el.is_visible():
                 continue
+            box = el.bounding_box()
+        except Exception:
+            continue
+        if not box or box["width"] < 20 or box["width"] > 260:
+            continue
+        area = box["width"] * box["height"]
+        if best is None or area < best[0]:
+            best = (area, el)
+    if best is None:
+        return None
+    best[1].scroll_into_view_if_needed()  # the grid scrolls sideways
+    return best[1].bounding_box()
+
+
+def work_item_row(page, text, below_y):
+    """The visible work item title in the grid (not the dropdown): its box, or None."""
+    found = page.get_by_text(text, exact=False)
+    for i in range(min(found.count(), 20)):
+        el = found.nth(i)
+        try:
+            if not el.is_visible():
+                continue
+            box = el.bounding_box()
+        except Exception:
+            continue
+        if box and box["y"] > below_y:
+            return box
     return None
-
-
-def put(page, control, text):
-    tag = control.evaluate("e => e.tagName.toLowerCase()")
-    if tag == "select":
-        control.select_option(label=text)
-        return
-    control.click()
-    try:
-        control.fill(text)
-    except Exception:
-        page.keyboard.press("Control+A")
-        page.keyboard.type(text)
-    # Dropdown-style fields offer a list: pick the matching option if one appears.
-    try:
-        option = page.get_by_role("option", name=text, exact=False).first
-        if option.is_visible(timeout=800):
-            option.click()
-    except Exception:
-        pass
 
 
 def inventory(page):
@@ -95,10 +116,94 @@ def inventory(page):
             """() => [...document.querySelectorAll('input,textarea,select,button')]
                 .filter(e => e.offsetParent !== null)
                 .map(e => [e.tagName, e.type || '', e.getAttribute('aria-label') || '', e.placeholder || '',
-                           e.name || '', (e.innerText || '').trim().slice(0, 40)].join(' | ')).slice(0, 60)"""
+                           (e.innerText || '').trim().slice(0, 40)].join(' | ')).slice(0, 60)"""
         )
     except Exception:
         return []
+
+
+def changed(page, log, args, why):
+    shot = pathlib.Path(args.log_dir) / "keka-last.png"
+    try:
+        page.screenshot(path=str(shot))
+    except Exception:
+        pass
+    log(why)
+    log("Things on the page:")
+    for line in inventory(page):
+        log("   " + line)
+    return finish(CHANGED, log, f"Screenshot: {shot}")
+
+
+def fill_day(page, entry, fields, args, log):
+    date = datetime.date.fromisoformat(entry["date"])
+    project, item = entry.get("project", ""), entry.get("task", "")
+    if not project or not item:
+        return changed(page, log, args, "No project or work item given (set them in Nyvora Settings).")
+
+    header = day_header(page, date)
+    if header is None:
+        return changed(page, log, args, f"The column for {date:%d %b} is not on the page. Open the week that holds it and try again.")
+    below = header["y"] + header["height"]
+
+    row = work_item_row(page, item, below)
+    if row is None:
+        log(f"No '{item}' row this week; adding it")
+        page.get_by_text(fields["add_entry"], exact=False).first.click()
+        search = page.get_by_placeholder(fields["project_search_placeholder"], exact=True).first
+        search.wait_for(state="visible", timeout=8000)
+        search.fill(project)
+        time.sleep(1)
+        page.get_by_text(project, exact=True).first.click()
+        time.sleep(1)
+        page.get_by_text(item, exact=False).first.click()
+        for _ in range(20):
+            time.sleep(0.5)
+            row = work_item_row(page, item, below)
+            if row:
+                break
+        if row is None:
+            return changed(page, log, args, f"Chose '{project}' / '{item}' but no row appeared.")
+    header = day_header(page, date) or header  # the grid may have shifted
+
+    x = header["x"] + header["width"] / 2
+    y = row["y"] + row["height"] / 2
+    page.mouse.click(x, y)
+    time.sleep(0.4)
+    page.keyboard.press("Control+A")
+    page.keyboard.type(hours_text(entry["hours"]))
+    log(f"Typed {hours_text(entry['hours'])} h for {date:%a %d %b}")
+
+    comment = page.get_by_placeholder(re.compile(fields["comment_placeholder"], re.I)).first
+    try:
+        comment.wait_for(state="visible", timeout=6000)
+    except Exception:
+        return changed(page, log, args, "The comment box did not appear after typing the hours.")
+    comment.fill(entry["comment"])
+    log("Typed the comment")
+    try:
+        page.get_by_text("All Timesheets", exact=True).first.click()  # click away so Keka takes the values
+    except Exception:
+        pass
+    time.sleep(0.5)
+
+    if not args.save:
+        return OK
+
+    name = fields["save_button"]
+    if name.lower() in [n.lower() for n in fields["never_click"]]:
+        return changed(page, log, args, "Refusing to click a button on the never-click list.")
+    save = page.get_by_role("button", name=name, exact=True)
+    if save.count() == 0:
+        return changed(page, log, args, "Filled, but there is no Save button.")
+    save.first.click()
+    log(f"Clicked '{name}'")
+    try:
+        page.get_by_text(re.compile(fields["saved_text"], re.I)).first.wait_for(state="visible", timeout=10000)
+    except Exception:
+        return changed(page, log, args, "Clicked Save but did not see Keka confirm it.")
+    log("Keka confirmed the save (still not submitted).")
+    return OK
 
 
 def main():
@@ -108,7 +213,7 @@ def main():
     ap.add_argument("--log-dir", required=True)
     ap.add_argument("--entry")
     ap.add_argument("--login", action="store_true", help="open Edge so you can sign in, then stop")
-    ap.add_argument("--save", action="store_true", help="also click Save on the day's entry (never Submit)")
+    ap.add_argument("--save", action="store_true", help="also press Save (a draft; never Submit)")
     args = ap.parse_args()
     log = Log(args.log_dir)
 
@@ -118,7 +223,7 @@ def main():
         return finish(NO_PLAYWRIGHT, log, "playwright is not installed in this Python. (Nyvora normally sets this up itself.)")
 
     host = urlparse(args.url).hostname
-    fields = json.loads((pathlib.Path(__file__).with_name("keka_fields.json")).read_text(encoding="utf-8"))
+    fields = json.loads(pathlib.Path(__file__).with_name("keka_fields.json").read_text(encoding="utf-8"))
     entry = json.loads(pathlib.Path(args.entry).read_text(encoding="utf-8")) if args.entry else {}
 
     try:
@@ -126,6 +231,7 @@ def main():
             ctx = p.chromium.launch_persistent_context(
                 args.profile, channel="msedge", headless=False, no_viewport=True, args=["--no-first-run"])
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.set_default_timeout(10000)
             try:
                 page.goto(args.url, wait_until="domcontentloaded", timeout=45000)
                 try:
@@ -148,46 +254,16 @@ def main():
                     return finish(SIGN_IN, log, f"Not signed in (landed on {page.url}).")
 
                 log(f"On {page.url}; filling {entry.get('date')}")
-                plan = [("hours", f"{float(entry['hours']):g}" if entry.get("hours") is not None else ""),
-                        ("project", entry.get("project", "")), ("task", entry.get("task", "")),
-                        ("comment", entry.get("comment", ""))]
-                for key, text in plan:
-                    if not text:
-                        continue
-                    control = find(page, fields[key])
-                    if control is None:
-                        shot = pathlib.Path(args.log_dir) / "keka-last.png"
-                        try:
-                            page.screenshot(path=str(shot))
-                        except Exception:
-                            pass
-                        log(f"Could not find the '{key}' field (tried {fields[key]}). Fields on the page:")
-                        for line in inventory(page):
-                            log("   " + line)
-                        return finish(CHANGED, log, f"Screenshot: {shot}")
-                    put(page, control, str(text))
-                    log(f"Filled {key}")
-
-                if args.save:
-                    never = [n.lower() for n in fields["never_click"]]
-                    for name in fields["save_buttons"]:
-                        if name.lower() in never:
-                            continue
-                        button = page.get_by_role("button", name=name, exact=True)
-                        if button.count() and button.first.is_visible():
-                            button.first.click()
-                            log(f"Clicked '{name}'")
-                            break
-                    else:
-                        return finish(CHANGED, log, "Filled, but found no Save button.")
-
-                code = finish(OK, log, "Filled. Review it in the Edge window; Nyvora never submits.")
+                code = fill_day(page, entry, fields, args, log)
+                if code != OK:
+                    return code  # fill_day already reported it
+                result = finish(OK, log, "Filled. Nyvora never submits the week: do that yourself when it is ready.")
                 if not args.save:
-                    try:  # keep the window open so you can check it and press Save yourself
+                    try:  # no Save was pressed: keep the window open so you can check it and press Save yourself
                         ctx.wait_for_event("close", timeout=30 * 60 * 1000)
                     except Exception:
                         pass
-                return code
+                return result
             finally:
                 try:
                     ctx.close()

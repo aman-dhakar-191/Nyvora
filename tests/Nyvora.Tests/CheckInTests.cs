@@ -81,6 +81,10 @@ public sealed class CheckInScheduleTests
         Assert.Equal("18:00", s.CheckInTime);
         Assert.Equal("Fri", s.WeeklyReminderDay);
         Assert.Equal("", s.KekaUrl);
+        Assert.Equal("", s.KekaProject);
+        Assert.Equal("", s.KekaWorkItem);
+        Assert.Equal(8, s.KekaDailyHours);
+        Assert.True(s.KekaSaveDraft); // saves the draft, never submits
     }
 
     [Fact]
@@ -130,8 +134,8 @@ public sealed class CheckInStoreTests : IDisposable
     public void SavingTheSameDayReplaces()
     {
         var s = Store();
-        s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 4 });
-        s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 8 });
+        s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 4, Comment = "a" });
+        s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 8, Comment = "b" });
         Assert.Single(s.Load());
         Assert.Equal(8, s.Get(new DateOnly(2026, 11, 16))!.Hours);
     }
@@ -144,7 +148,17 @@ public sealed class CheckInStoreTests : IDisposable
     public void RejectsBadHours(double hours)
     {
         var s = Store();
-        Assert.NotNull(s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = hours }));
+        Assert.NotNull(s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = hours, Comment = "c" }));
+        Assert.Empty(s.Load());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ACommentIsRequired(string comment)
+    {
+        var s = Store();
+        Assert.NotNull(s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 8, Comment = comment }));
         Assert.Empty(s.Load());
     }
 
@@ -152,7 +166,7 @@ public sealed class CheckInStoreTests : IDisposable
     public void MarksFilled()
     {
         var s = Store();
-        s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 8 });
+        s.Save(new CheckInEntry { Date = new DateOnly(2026, 11, 16), Hours = 8, Comment = "b" });
         s.MarkFilled(new DateOnly(2026, 11, 16));
         Assert.True(s.Get(new DateOnly(2026, 11, 16))!.Filled);
     }

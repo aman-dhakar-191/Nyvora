@@ -12,46 +12,36 @@ namespace Nyvora.App.UI;
 /// </summary>
 internal sealed class CheckInWindow : Window
 {
-    private readonly TextBox _project = new() { Header = "Project", PlaceholderText = "Project" };
-    private readonly TextBox _task = new() { Header = "Task", PlaceholderText = "Task" };
-    private readonly TextBox _hours = new() { Header = "Hours", PlaceholderText = "8" };
+    private readonly TextBox _hours = new() { Header = "Hours (fixed in Settings; change it for a short day)", PlaceholderText = "8", Width = 120, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _comment = new()
     {
-        Header = "Comment",
+        Header = "What did you do? (this is the task and the comment in Keka)",
         PlaceholderText = "What did you do?",
         AcceptsReturn = true,
         TextWrapping = TextWrapping.Wrap,
-        MinHeight = 110,
+        MinHeight = 160,
     };
 
     private readonly TextBlock _problem = new() { TextWrapping = TextWrapping.Wrap, Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)), Visibility = Visibility.Collapsed };
     private readonly DateOnly _date;
     private readonly Func<CheckInEntry, bool, string?> _submit;
 
-    public CheckInWindow(DateOnly date, CheckInEntry? previous, bool canFill, Func<CheckInEntry, bool, string?> submit)
+    public CheckInWindow(DateOnly date, CheckInEntry? today, double defaultHours, bool canFill, Func<CheckInEntry, bool, string?> submit)
     {
         _date = date;
         _submit = submit;
         Title = "Nyvora daily check-in";
 
-        // Today's entry if there is one, otherwise yesterday's project/task/hours as a starting point.
-        if (previous is not null)
-        {
-            _project.Text = previous.Project;
-            _task.Text = previous.Task;
-            _hours.Text = previous.Hours.ToString("0.##", CultureInfo.InvariantCulture);
-            if (previous.Date == date)
-            {
-                _comment.Text = previous.Comment;
-            }
-        }
+        // Today's entry if there is one (to edit it), otherwise the fixed hours from Settings.
+        _hours.Text = (today?.Hours ?? defaultHours).ToString("0.##", CultureInfo.InvariantCulture);
+        _comment.Text = today?.Comment ?? "";
 
         var save = new Button { Content = "Save", MinWidth = 80 };
         save.Click += (_, _) => Submit(fill: false);
         var fill = new Button { Content = "Save and fill Keka", IsEnabled = canFill };
         if (!canFill)
         {
-            ToolTipService.SetToolTip(fill, "Set the Keka timesheet address in Settings first");
+            ToolTipService.SetToolTip(fill, "Set the Keka address, project and work item in Settings first");
         }
 
         fill.Click += (_, _) => Submit(fill: true);
@@ -71,10 +61,8 @@ internal sealed class CheckInWindow : Window
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         });
-        panel.Children.Add(_project);
-        panel.Children.Add(_task);
-        panel.Children.Add(_hours);
         panel.Children.Add(_comment);
+        panel.Children.Add(_hours);
         panel.Children.Add(_problem);
         panel.Children.Add(buttons);
 
@@ -86,7 +74,7 @@ internal sealed class CheckInWindow : Window
         };
 
         const int width = 520;
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(width, 640));
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(width, 520));
         var work = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         AppWindow.Move(new Windows.Graphics.PointInt32(work.X + Math.Max(0, (work.Width - width) / 2), work.Y + 80)); // under the notch
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -109,8 +97,6 @@ internal sealed class CheckInWindow : Window
         var entry = new CheckInEntry
         {
             Date = _date,
-            Project = _project.Text.Trim(),
-            Task = _task.Text.Trim(),
             Hours = hours,
             Comment = _comment.Text.Trim(),
         };

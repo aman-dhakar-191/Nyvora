@@ -83,25 +83,29 @@ The pill shows what is due and how many tasks are open. It can also show a **tem
 - It is stored in `notch.json` next to your tasks, and the running app picks changes up within a second.
 
 ## Daily check-in and Keka timesheet
-Nyvora can ask once a day what you did (project, task, hours, comment) and keep it in `checkins.json`. A weekly reminder
-(default Friday 17:00) tells you to submit your timesheet. **Nyvora never submits it.** Everything is under Settings →
-Timesheet: the check-in time and days (default 18:00, Mon-Fri), the reminder day and time, and the Keka timesheet address.
-A check-in missed while the PC was off appears at the next start (once per day; "Not now" waits until tomorrow).
+Nyvora asks once a day what you did: one box, which becomes both the task and the comment in Keka. The project, the work
+item and the hours per day are fixed in Settings → Timesheet (the form lets you change the hours for a short day). Entries
+are kept in `checkins.json`. A weekly reminder (default Friday 17:00) tells you to submit your timesheet. **Nyvora never
+submits it.** The check-in time and days (default 18:00, Mon-Fri), the reminder and the Keka timesheet address are all in
+Settings. A check-in missed while the PC was off appears at the next start (once per day; "Not now" waits until tomorrow).
 
-"Save and fill Keka" runs `keka\keka_fill.py` (shipped beside the app) with Python and the Edge you already have. It
-needs Python on the PC; the first run creates a private environment in `%LOCALAPPDATA%\Nyvora\keka\venv` and installs
-Playwright there (no global install, no browser download). It uses its own Edge profile (in `%LOCALAPPDATA%\Nyvora\keka`), so
-you sign in once with Settings → Sign in to Keka. The notch tells you what happened:
+"Save and fill Keka" runs `keka\keka_fill.py` (shipped beside the app) with Python and the Edge you already have. It does
+what you do by hand on the "All Timesheets" page: adds the project / work item row with "+ Add Time Entry" if the week does
+not have it, types the hours in that day's cell and the comment, then presses Save (a draft; you can turn that off). It
+never presses "Submit weekly timesheet". It needs Python on the PC; the first run creates a private environment in
+`%LOCALAPPDATA%\Nyvora\keka\venv` and installs Playwright there (no global install, no browser download). It uses its own
+Edge profile, so you sign in once with Settings → Sign in to Keka. The notch tells you what happened:
 
 | Notch | Meaning |
 |---|---|
-| Keka filled: review and submit | The entry was filled. By default the Edge window stays open for you to check and press Save. |
+| Keka filled: review and submit | The day was filled (and saved as a draft). Submit the week yourself when it is ready. |
 | Keka: sign in needed | The page showed a login. Use Settings → Sign in to Keka, then fill again. |
-| Keka: page changed, see log | A field was not found. `keka.log` and `keka-last.png` (in `%LOCALAPPDATA%\Nyvora\keka`) list what was on the page. Field names are in `keka\keka_fields.json`. |
+| Keka: page changed, see log | Something was not found. `keka.log` and `keka-last.png` (in `%LOCALAPPDATA%\Nyvora\keka`) show what was on the page. The texts it looks for are in `keka\keka_fields.json`. |
+| Keka: set address, project, work item | Fill those in Settings first. |
 | Keka: Python not found | Install Python from python.org (or the Microsoft Store). |
-| Keka: setup failed, see log | The automatic install failed (offline or blocked); see `nyvora.log`. |
+| Keka: setup failed, see log | The automatic Playwright install failed (offline or blocked); see `nyvora.log`. |
 
-The address is a setting, so if Keka moves the page you change it there. Nothing about your Keka login is stored by Nyvora.
+The address is a setting, so if Keka moves the page you change it there. Nyvora does not store your Keka login.
 
 ## Keyboard
 

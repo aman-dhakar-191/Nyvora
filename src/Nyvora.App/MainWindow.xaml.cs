@@ -448,12 +448,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var cfg = _settings.Current;
         var today = DateOnly.FromDateTime(DateTime.Now);
-        var all = _checkIns.Load();
-        var previous = all.FirstOrDefault(e => e.Date == today) ?? all.LastOrDefault();
-        var canFill = KekaResult.ValidateUrl(_settings.Current.KekaUrl) is null;
-        var window = new CheckInWindow(today, previous, canFill, (entry, fill) =>
+        var canFill = KekaReady(cfg);
+        var window = new CheckInWindow(today, _checkIns.Get(today), cfg.KekaDailyHours, canFill, (entry, fill) =>
         {
+            entry.Project = cfg.KekaProject; // fixed in Settings; kept in the file so it shows what was filled
+            entry.Task = cfg.KekaWorkItem;
             if (_checkIns.Save(entry) is { } problem)
             {
                 return problem;
@@ -473,10 +474,21 @@ public sealed partial class MainWindow : Window
         Log.Info(manual ? "Check-in opened from Settings" : "Check-in opened");
     }
 
+    /// <summary>The address, project and work item are all needed to fill the page.</summary>
+    private static bool KekaReady(AppSettings s) =>
+        KekaResult.ValidateUrl(s.KekaUrl) is null && !string.IsNullOrWhiteSpace(s.KekaProject) && !string.IsNullOrWhiteSpace(s.KekaWorkItem);
+
     private async Task FillKekaAsync(CheckInEntry entry)
     {
         if (_kekaBusy)
         {
+            return;
+        }
+
+        if (!KekaReady(_settings.Current))
+        {
+            _kekaNote = new NotchMessage { Text = "Keka: set address, project, work item", Tone = NotchTone.Warning, ExpiresAt = DateTimeOffset.Now.AddSeconds(20) };
+            UpdateBadge();
             return;
         }
 
@@ -485,7 +497,7 @@ public sealed partial class MainWindow : Window
         {
             _kekaNote = KekaResult.Running();
             UpdateBadge();
-            var outcome = await KekaService.FillAsync(entry, _settings.Current.KekaUrl, _settings.Current.KekaPressSave, ShowKekaSetup);
+            var outcome = await KekaService.FillAsync(entry, _settings.Current.KekaUrl, _settings.Current.KekaSaveDraft, ShowKekaSetup);
             Log.Info($"Keka fill finished: {outcome}");
             if (outcome == KekaOutcome.Filled)
             {

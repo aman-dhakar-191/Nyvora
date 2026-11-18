@@ -143,7 +143,10 @@ public sealed partial class SettingsView : UserControl
         WeeklyDayBox.Text = settings.WeeklyReminderDay;
         WeeklyTimeBox.Text = settings.WeeklyReminderTime;
         KekaUrlBox.Text = settings.KekaUrl;
-        KekaSaveToggle.IsChecked = settings.KekaPressSave;
+        KekaProjectBox.Text = settings.KekaProject;
+        KekaWorkItemBox.Text = settings.KekaWorkItem;
+        KekaHoursBox.Text = settings.KekaDailyHours.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        KekaSaveToggle.IsChecked = settings.KekaSaveDraft;
         _timesheet = settings;
         _saveTimesheet = save;
     }
@@ -158,7 +161,18 @@ public sealed partial class SettingsView : UserControl
         var problems = new List<string>();
         s.CheckInEnabled = CheckInToggle.IsChecked == true;
         s.WeeklyReminderEnabled = WeeklyToggle.IsChecked == true;
-        s.KekaPressSave = KekaSaveToggle.IsChecked == true;
+        s.KekaSaveDraft = KekaSaveToggle.IsChecked == true;
+        s.KekaProject = KekaProjectBox.Text.Trim();
+        s.KekaWorkItem = KekaWorkItemBox.Text.Trim();
+        if (double.TryParse(KekaHoursBox.Text.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var hrs) && hrs > 0 && hrs <= 24)
+        {
+            s.KekaDailyHours = hrs;
+        }
+        else
+        {
+            problems.Add("Hours per day must be more than 0 and at most 24.");
+        }
+
 
         if (CheckInSchedule.TryParseTime(CheckInTimeBox.Text, out var t))
         {
@@ -218,6 +232,7 @@ public sealed partial class SettingsView : UserControl
         WeeklyDayBox.Text = s.WeeklyReminderDay;
         WeeklyTimeBox.Text = s.WeeklyReminderTime;
         KekaUrlBox.Text = s.KekaUrl;
+        KekaHoursBox.Text = s.KekaDailyHours.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
         _timesheet = s;
     }
 

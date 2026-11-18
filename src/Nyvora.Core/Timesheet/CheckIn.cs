@@ -7,6 +7,7 @@ public sealed class CheckInEntry
 {
     public DateOnly Date { get; set; }
 
+    /// <summary>Copied from Settings when the entry is saved, so the file shows what was filled.</summary>
     public string Project { get; set; } = "";
 
     public string Task { get; set; } = "";
@@ -24,6 +25,11 @@ public sealed class CheckInEntry
         if (!double.IsFinite(Hours) || Hours <= 0 || Hours > 24)
         {
             return "Hours must be more than 0 and at most 24.";
+        }
+
+        if (string.IsNullOrWhiteSpace(Comment))
+        {
+            return "Write what you did. Keka needs a comment.";
         }
 
         if (Project.Length > 200 || Task.Length > 200 || Comment.Length > 2000)

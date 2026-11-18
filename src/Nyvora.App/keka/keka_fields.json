@@ -1,9 +1,9 @@
 {
-  "_note": "Names of the fields on your Keka timesheet page, tried in order. Edit these if Keka labels them differently.",
-  "project": ["Project"],
-  "task": ["Task"],
-  "hours": ["Hours", "Time", "Duration", "Effort"],
-  "comment": ["Comment", "Comments", "Notes", "Description", "Remarks"],
-  "save_buttons": ["Save", "Add", "Add entry"],
-  "never_click": ["Submit", "Approve", "Send for approval", "Send"]
+  "_note": "Texts on your Keka timesheet page. Edit these if Keka words them differently.",
+  "add_entry": "Add Time Entry",
+  "project_search_placeholder": "Search",
+  "comment_placeholder": "comment",
+  "save_button": "Save",
+  "saved_text": "saved successfully",
+  "never_click": ["Submit", "Submit weekly timesheet", "Approve", "Send for approval"]
 }

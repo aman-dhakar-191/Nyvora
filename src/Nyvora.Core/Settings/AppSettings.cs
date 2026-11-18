@@ -57,11 +57,17 @@ public sealed class AppSettings
     /// <summary>The Keka page where the timesheet is filled. Empty until you set it; change it here if Keka moves it.</summary>
     public string KekaUrl { get; set; } = "";
 
-    /// <summary>
-    /// After filling an entry, also press Save on it. Off by default: the Edge window stays open so you can check it and
-    /// press Save yourself. Nyvora never presses Submit.
-    /// </summary>
-    public bool KekaPressSave { get; set; }
+    /// <summary>The Keka project to log time against, as it appears in the project list (for example "Inkarp Instruments").</summary>
+    public string KekaProject { get; set; } = "";
+
+    /// <summary>The work item (task) under that project, as it appears in the work item list. Fixed: you only type the comment each day.</summary>
+    public string KekaWorkItem { get; set; } = "";
+
+    /// <summary>Hours logged each day (you can change them in the check-in form for a short day).</summary>
+    public double KekaDailyHours { get; set; } = 8;
+
+    /// <summary>After filling a day, press Keka's Save (a draft). Nyvora never presses "Submit weekly timesheet".</summary>
+    public bool KekaSaveDraft { get; set; } = true;
 
     public DateOnly? LastCheckInPrompt { get; set; }
 
