@@ -141,6 +141,11 @@ def fill_day(page, entry, fields, args, log, quiet=False):
     if not project or not item:
         return changed(page, log, args, "No project or work item given (set them in Nyvora Settings).")
 
+    try:  # Keka is a single-page app: wait until the grid has actually drawn
+        page.get_by_text(re.compile(r"Add Time Entry|Attendance hours", re.I)).first.wait_for(state="visible", timeout=30000)
+    except Exception:
+        return changed(page, log, args, "The timesheet grid did not appear within 30 seconds.")
+
     header = day_header(page, date)
     if header is None:
         return changed(page, log, args, f"The column for {date:%d %b} is not on the page. Open the week that holds it and try again.")
@@ -216,7 +221,9 @@ def launch(p, args, headless):
     kw = dict(channel="msedge", headless=headless, args=["--no-first-run"])
     if args.browser_path:  # tests only
         kw = dict(executable_path=args.browser_path, headless=headless, args=["--no-sandbox"])
-    if not headless:
+    if headless:
+        kw["viewport"] = {"width": 1600, "height": 1000}  # a desktop-size page, not the small default
+    else:
         kw["no_viewport"] = True
     ctx = p.chromium.launch_persistent_context(args.profile, **kw)
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
@@ -320,6 +327,10 @@ def main():
                 log("Signed out: opening a window so you can sign in, then trying again.")
                 if show_window(p, args, log, host):
                     code = attempt(p, args, fields, entry, host, log, headless=args.save)
+
+            if code in (CHANGED, FAILED) and args.save:
+                log("The background run did not work; trying once more in a visible window.")
+                code = attempt(p, args, fields, entry, host, log, headless=False)
 
             if code == OK:
                 return finish(OK, log, "Filled. Nyvora never submits the week: do that yourself when it is ready.")
