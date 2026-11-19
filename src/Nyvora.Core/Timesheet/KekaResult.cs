@@ -11,6 +11,7 @@ public enum KekaOutcome
     PythonMissing = 12,
     Failed = 13,
     PlaywrightMissing = 14,
+    ProfileBusy = 15,
 }
 
 public static class KekaResult
@@ -31,6 +32,7 @@ public static class KekaResult
         KekaOutcome.PageChanged => new NotchMessage { Text = "Keka: page changed, see log", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
         KekaOutcome.PythonMissing => new NotchMessage { Text = "Keka: Python not found", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
         KekaOutcome.PlaywrightMissing => new NotchMessage { Text = "Keka: setup failed, see log", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
+        KekaOutcome.ProfileBusy => new NotchMessage { Text = "Keka: close its open Edge window", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
         _ => new NotchMessage { Text = "Keka: could not fill, see log", Tone = NotchTone.Error, ExpiresAt = now + ProblemFor },
     };
 

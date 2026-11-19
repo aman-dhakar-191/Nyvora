@@ -189,6 +189,7 @@ public sealed class KekaResultTests
     [InlineData(11, KekaOutcome.PageChanged)]
     [InlineData(12, KekaOutcome.PythonMissing)]
     [InlineData(14, KekaOutcome.PlaywrightMissing)]
+    [InlineData(15, KekaOutcome.ProfileBusy)]
     [InlineData(99, KekaOutcome.Failed)]
     [InlineData(-1, KekaOutcome.Failed)]
     public void MapsExitCodes(int code, KekaOutcome expected) => Assert.Equal(expected, KekaResult.FromExitCode(code));

@@ -11,7 +11,7 @@ What it does, the way you do it by hand:
 
 Exit codes (Nyvora reads these):
   0  done            10  sign in needed      11  page changed (something was not found)
-  13 something else  14  playwright is not installed
+  13 something else  14  playwright is not installed  15  the Edge profile is in use (close its window)
 
 Needs the playwright package. Nyvora installs it into its own Python environment the first time (no browser download: it uses Edge).
 """
@@ -24,7 +24,7 @@ import sys
 import time
 from urllib.parse import urlparse
 
-OK, SIGN_IN, CHANGED, FAILED, NO_PLAYWRIGHT = 0, 10, 11, 13, 14
+OK, SIGN_IN, CHANGED, FAILED, NO_PLAYWRIGHT, PROFILE_BUSY = 0, 10, 11, 13, 14, 15
 SIGNED_OUT_WORDS = ("login", "signin", "sign-in", "microsoftonline", "accounts.google", "okta", "/auth", "sso")
 MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
@@ -110,6 +110,16 @@ def work_item_row(page, text, below_y):
     return None
 
 
+def wait_for_row(page, text, below_y, seconds=10):
+    """The grid's rows arrive a moment after its header: look for up to `seconds` before deciding the row is missing."""
+    end = time.time() + seconds
+    while True:
+        row = work_item_row(page, text, below_y)
+        if row or time.time() >= end:
+            return row
+        time.sleep(0.5)
+
+
 def inventory(page):
     try:
         return page.evaluate(
@@ -151,17 +161,19 @@ def fill_day(page, entry, fields, args, log, quiet=False):
         return changed(page, log, args, f"The column for {date:%d %b} is not on the page. Open the week that holds it and try again.")
     below = header["y"] + header["height"]
 
-    row = work_item_row(page, item, below)
+    row = wait_for_row(page, item, below)
     if row is None:
         log(f"No '{item}' row this week; adding it")
         page.get_by_text(fields["add_entry"], exact=False).first.click()
-        search = page.get_by_placeholder(fields["project_search_placeholder"], exact=True).first
+        menu = page.locator("bs-dropdown-container")  # only look inside the opened list, never the grid behind it
+        menu.first.wait_for(state="visible", timeout=8000)
+        search = menu.first.get_by_placeholder(fields["project_search_placeholder"], exact=True).first
         search.wait_for(state="visible", timeout=8000)
         search.fill(project)
         time.sleep(1)
-        page.get_by_text(project, exact=True).first.click()
+        menu.first.get_by_text(project, exact=True).first.click()
         time.sleep(1)
-        page.get_by_text(item, exact=False).first.click()
+        menu.first.get_by_text(item, exact=False).first.click()
         for _ in range(20):
             time.sleep(0.5)
             row = work_item_row(page, item, below)
@@ -259,7 +271,11 @@ def attempt(p, args, fields, entry, host, log, headless):
         log(f"On {page.url}; filling {entry.get('date')}")
         return fill_day(page, entry, fields, args, log, quiet=True)
     except Exception as ex:  # Edge missing, profile in use, ...
-        log(f"{type(ex).__name__}: {ex}")
+        text = str(ex)
+        if "existing browser session" in text or "already in use" in text:
+            log("The Edge profile Nyvora uses is already open in a window. Close that window and try again.")
+            return PROFILE_BUSY
+        log(f"{type(ex).__name__}: {text.splitlines()[0] if text else ''}")
         return FAILED
     finally:
         if ctx is not None:
@@ -277,7 +293,7 @@ def show_window(p, args, log, sign_in_host=None):
         if sign_in_host:
             return wait_for_sign_in(page, sign_in_host, log)
         try:  # leave it open so you can look, sign in or fix things yourself
-            ctx.wait_for_event("close", timeout=30 * 60 * 1000)
+            ctx.wait_for_event("close", timeout=10 * 60 * 1000)
         except Exception:
             pass
         return True
@@ -322,6 +338,8 @@ def main():
 
             # Quietly in the background when it saves by itself; with a window when you asked to review and press Save.
             code = attempt(p, args, fields, entry, host, log, headless=args.save)
+            if code == PROFILE_BUSY:
+                return finish(PROFILE_BUSY, log)
 
             if code == SIGN_IN:
                 log("Signed out: opening a window so you can sign in, then trying again.")
@@ -331,6 +349,8 @@ def main():
             if code in (CHANGED, FAILED) and args.save:
                 log("The background run did not work; trying once more in a visible window.")
                 code = attempt(p, args, fields, entry, host, log, headless=False)
+                if code == PROFILE_BUSY:
+                    return finish(PROFILE_BUSY, log)
 
             if code == OK:
                 return finish(OK, log, "Filled. Nyvora never submits the week: do that yourself when it is ready.")

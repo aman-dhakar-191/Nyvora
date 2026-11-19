@@ -102,6 +102,7 @@ Edge profile, so you sign in once with Settings → Sign in to Keka. The notch t
 | Keka: sign in needed | The page showed a login. Use Settings → Sign in to Keka, then fill again. |
 | Keka: page changed, see log | Something was not found. `keka.log` and `keka-last.png` (in `%LOCALAPPDATA%\Nyvora\keka`) show what was on the page. The texts it looks for are in `keka\keka_fields.json`. |
 | Keka: set address, project, work item | Fill those in Settings first. |
+| Keka: close its open Edge window | An earlier Keka Edge window (opened after a problem) is still open and holds the sign-in profile. Close it and fill again. |
 | Keka: Python not found | Install Python from python.org (or the Microsoft Store). |
 | Keka: setup failed, see log | The automatic Playwright install failed (offline or blocked); see `nyvora.log`. |
 
