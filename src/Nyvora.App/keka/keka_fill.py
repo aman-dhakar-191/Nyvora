@@ -85,9 +85,10 @@ def day_header(page, date):
             continue
         if not box or box["width"] < 20 or box["width"] > 260:
             continue
-        area = box["width"] * box["height"]
-        if best is None or area < best[0]:
-            best = (area, el)
+        # The grid's header is the topmost match. (The "Comment Summary" list lower on the page also says "Fri, 20 Nov"
+        # once the day has an entry, and it is a smaller element, so size must not decide.)
+        if best is None or box["y"] < best[0]:
+            best = (box["y"], el)
     if best is None:
         return None
     best[1].scroll_into_view_if_needed()  # the grid scrolls sideways
@@ -97,6 +98,7 @@ def day_header(page, date):
 def work_item_row(page, text, below_y):
     """The visible work item title in the grid (not the dropdown): its box, or None."""
     found = page.get_by_text(text, exact=False)
+    best = None
     for i in range(min(found.count(), 20)):
         el = found.nth(i)
         try:
@@ -105,9 +107,9 @@ def work_item_row(page, text, below_y):
             box = el.bounding_box()
         except Exception:
             continue
-        if box and box["y"] > below_y:
-            return box
-    return None
+        if box and box["y"] > below_y and (best is None or box["y"] < best["y"]):
+            best = box
+    return best
 
 
 def wait_for_row(page, text, below_y, seconds=10):
@@ -183,6 +185,7 @@ def fill_day(page, entry, fields, args, log, headless=False):
     if header is None:
         return changed(page, log, args, f"The column for {date:%d %b} is not on the page. Open the week that holds it and try again.")
     below = header["y"] + header["height"]
+    log(f"Day column at x={header['x']:.0f} y={header['y']:.0f}")
 
     row = wait_for_row(page, item, below, seconds=5 if headless else 10)
     if row is None and headless:
@@ -209,6 +212,7 @@ def fill_day(page, entry, fields, args, log, headless=False):
             return changed(page, log, args, f"Chose '{project}' / '{item}' but no row appeared.")
     header = day_header(page, date) or header  # the grid may have shifted
 
+    log(f"Row at y={row['y']:.0f}")
     x = header["x"] + header["width"] / 2
     y = row["y"] + row["height"] / 2
     page.mouse.click(x, y)
@@ -296,6 +300,7 @@ def wait_for_sign_in(page, host, log):
 def attempt(p, args, fields, entry, host, log, headless):
     """One fill. Returns OK, SIGN_IN, CHANGED or FAILED (never raises)."""
     ctx = None
+    page = None
     try:
         ctx, page = launch(p, args, headless)
         if signed_out(page, host):
@@ -309,6 +314,12 @@ def attempt(p, args, fields, entry, host, log, headless):
             log("The Edge profile Nyvora uses is already open in a window. Close that window and try again.")
             return PROFILE_BUSY
         log(f"{type(ex).__name__}: {text.splitlines()[0] if text else ''}")
+        try:
+            page.screenshot(path=str(pathlib.Path(args.log_dir) / "keka-last.png"))
+            for line in inventory(page):
+                log("   " + line)
+        except Exception:
+            pass
         return FAILED
     finally:
         if ctx is not None:

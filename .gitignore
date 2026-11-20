@@ -6,3 +6,5 @@ obj/
 artifacts/
 TestResults/
 publish/
+__pycache__/
+*.pyc
