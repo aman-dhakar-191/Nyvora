@@ -120,6 +120,29 @@ def wait_for_row(page, text, below_y, seconds=10):
         time.sleep(0.5)
 
 
+def open_comment(page, column_x, row_y):
+    """Click the 'Comment' label nearest to the day's column, below the row. True if one was clicked."""
+    labels = page.get_by_text(re.compile(r"^\s*comment\s*$", re.I))
+    best = None
+    for i in range(min(labels.count(), 30)):
+        el = labels.nth(i)
+        try:
+            if not el.is_visible():
+                continue
+            box = el.bounding_box()
+        except Exception:
+            continue
+        if not box or box["y"] < row_y - 5:
+            continue
+        distance = abs(box["x"] + box["width"] / 2 - column_x)
+        if best is None or distance < best[0]:
+            best = (distance, el)
+    if best is None:
+        return False
+    best[1].click()
+    return True
+
+
 def inventory(page):
     try:
         return page.evaluate(
@@ -145,7 +168,7 @@ def changed(page, log, args, why):
     return finish(CHANGED, log, f"Screenshot: {shot}")
 
 
-def fill_day(page, entry, fields, args, log, quiet=False):
+def fill_day(page, entry, fields, args, log, headless=False):
     date = datetime.date.fromisoformat(entry["date"])
     project, item = entry.get("project", ""), entry.get("task", "")
     if not project or not item:
@@ -161,7 +184,10 @@ def fill_day(page, entry, fields, args, log, quiet=False):
         return changed(page, log, args, f"The column for {date:%d %b} is not on the page. Open the week that holds it and try again.")
     below = header["y"] + header["height"]
 
-    row = wait_for_row(page, item, below)
+    row = wait_for_row(page, item, below, seconds=5 if headless else 10)
+    if row is None and headless:
+        # The hidden browser often cannot see this page properly; let the visible retry add the row.
+        return changed(page, log, args, f"The hidden run could not see the '{item}' row; a window will try next.")
     if row is None:
         log(f"No '{item}' row this week; adding it")
         page.get_by_text(fields["add_entry"], exact=False).first.click()
@@ -193,9 +219,16 @@ def fill_day(page, entry, fields, args, log, quiet=False):
 
     comment = page.get_by_placeholder(re.compile(fields["comment_placeholder"], re.I)).first
     try:
-        comment.wait_for(state="visible", timeout=6000)
+        comment.wait_for(state="visible", timeout=3000)
     except Exception:
-        return changed(page, log, args, "The comment box did not appear after typing the hours.")
+        # Same hours as already saved: Keka sees no change and does not open the box. Open it from the COMMENT label under the day.
+        log("The comment box did not open by itself (same hours as before?); opening it from the day's COMMENT label")
+        if not open_comment(page, x, row["y"]):
+            return changed(page, log, args, "The comment box did not appear and no COMMENT label was found under the day.")
+        try:
+            comment.wait_for(state="visible", timeout=6000)
+        except Exception:
+            return changed(page, log, args, "The comment box did not appear after typing the hours.")
     comment.fill(entry["comment"])
     log("Typed the comment")
     try:
@@ -269,7 +302,7 @@ def attempt(p, args, fields, entry, host, log, headless):
             log(f"Not signed in (landed on {page.url}).")
             return SIGN_IN
         log(f"On {page.url}; filling {entry.get('date')}")
-        return fill_day(page, entry, fields, args, log, quiet=True)
+        return fill_day(page, entry, fields, args, log, headless=headless)
     except Exception as ex:  # Edge missing, profile in use, ...
         text = str(ex)
         if "existing browser session" in text or "already in use" in text:
