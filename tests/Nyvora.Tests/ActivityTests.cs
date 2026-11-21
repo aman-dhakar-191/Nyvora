@@ -90,6 +90,15 @@ public sealed class ActivityTests : IDisposable
     }
 
     [Fact]
+    public void AnAnsweredQuestionDisappearsAfterTheShortLifetimeIfTheAgentNeverMovesOn()
+    {
+        Up(new ActivityUpdate("d", "Deploy", State: "waiting_approval", Question: "Ship?"));
+        ActivityStore.Decide(Path_, "d", ApprovalDecision.Approved, Now);
+        Assert.Single(ActivityStore.Load(Path_, Now + Activity.FinishedTtl - TimeSpan.FromSeconds(1))); // time to read the answer
+        Assert.Empty(ActivityStore.Load(Path_, Now + Activity.FinishedTtl + TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
     public void AskingAgainStartsAFreshQuestion()
     {
         Up(new ActivityUpdate("d", "Deploy", State: "waiting_approval", Question: "Ship?"));

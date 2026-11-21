@@ -200,7 +200,8 @@ public static class ActivityStore
 
         activity.Decision = decision;
         activity.UpdatedAt = now;
-        activity.ExpiresAt = now + Activity.ActiveTtl;
+        // Answered: the agent has a few minutes to read the answer; if it never moves the activity on, the card goes away.
+        activity.ExpiresAt = now + Activity.FinishedTtl;
         WriteAll(path, all);
         return null;
     }

@@ -56,7 +56,7 @@ public sealed partial class MainWindow : Window
     private bool _passiveExpand;
     private bool _focusMode; // a reminder card is showing instead of the list
     private static readonly SizeD FocusSize = new(380, 200);
-    private static readonly SizeD ApprovalSize = new(400, 250);
+    private static readonly SizeD ApprovalSize = new(400, 220);
 
     private bool _compact;
     private readonly Windows.UI.ViewManagement.UISettings _ui = new();
@@ -926,7 +926,7 @@ public sealed partial class MainWindow : Window
 
                 Log.Info($"{asking.Count} agent question(s) waiting for approval");
                 _focusMode = true;
-                Panel.ShowApproval(asking.Select(a => a.Id));
+                Panel.ShowApproval(asking.OrderBy(a => a.UpdatedAt).Select(a => a.Id)); // oldest question first
                 ApplyPanelSize();
                 ExpandPassively();
             }
