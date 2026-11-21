@@ -10,6 +10,12 @@ public sealed class AppSettings
     /// <summary>Set to false in settings.json to stop all automatic network requests.</summary>
     public bool AutoCheckUpdates { get; set; } = true;
 
+    /// <summary>
+    /// Master switch for everything experimental (agent activities, and later the optional AI layer). Off by default:
+    /// with it off Nyvora behaves exactly as before and the experimental MCP tools are hidden and refused.
+    /// </summary>
+    public bool ExperimentalFeatures { get; set; }
+
     /// <summary>Keep the pill above other windows. Exclusive-fullscreen apps and games still cover it.</summary>
     public bool AlwaysOnTop { get; set; } = true;
 

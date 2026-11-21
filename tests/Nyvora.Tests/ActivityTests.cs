@@ -1,0 +1,164 @@
+using System.Text.Json.Nodes;
+using Nyvora.Core.Activities;
+using Nyvora.Core.Settings;
+using Nyvora.Mcp;
+using Xunit;
+
+namespace Nyvora.Tests;
+
+public sealed class ActivityTests : IDisposable
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 21, 12, 0, 0, TimeSpan.Zero);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "nyvora-act-" + Guid.NewGuid().ToString("N"));
+    private string Path_ => System.IO.Path.Combine(_dir, ActivityStore.FileName);
+
+    public ActivityTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose() => Directory.Delete(_dir, true);
+
+    private string? Up(ActivityUpdate u, DateTimeOffset? at = null) => ActivityStore.Upsert(Path_, u, at ?? Now, out _);
+
+    [Fact]
+    public void CreatesAndReadsAnActivity()
+    {
+        Assert.Null(Up(new ActivityUpdate("deploy", "Deploying v2", Step: 1, Steps: 4, Source: "agent")));
+        var a = Assert.Single(ActivityStore.Load(Path_, Now));
+        Assert.Equal("Deploying v2", a.Title);
+        Assert.Equal(ActivityState.Running, a.State);
+        Assert.Equal((1, 4), (a.Step, a.Steps));
+    }
+
+    [Fact]
+    public void UpdateKeepsFieldsLeftOut()
+    {
+        Up(new ActivityUpdate("deploy", "Deploying v2", Steps: 4, Detail: "building"));
+        Up(new ActivityUpdate("deploy", Step: 2), Now.AddMinutes(1));
+        var a = Assert.Single(ActivityStore.Load(Path_, Now.AddMinutes(1)));
+        Assert.Equal(("Deploying v2", "building", 2, 4), (a.Title, a.Detail, a.Step, a.Steps));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("has space")]
+    [InlineData("a/b")]
+    public void RejectsBadIds(string? id) => Assert.NotNull(Up(new ActivityUpdate(id, "x")));
+
+    [Fact]
+    public void NewActivityNeedsATitleAndLimitsAreEnforced()
+    {
+        Assert.NotNull(Up(new ActivityUpdate("a")));
+        Assert.NotNull(Up(new ActivityUpdate("a", new string('x', Activity.MaxTitle + 1))));
+        Assert.NotNull(Up(new ActivityUpdate("a", "ok", Detail: new string('x', Activity.MaxDetail + 1))));
+        Assert.NotNull(Up(new ActivityUpdate("a", "ok", Step: 5, Steps: 4)));
+        Assert.NotNull(Up(new ActivityUpdate("a", "ok", State: "nonsense")));
+        Assert.Empty(ActivityStore.Load(Path_, Now)); // nothing half-saved
+    }
+
+    [Fact]
+    public void CapsTheNumberOfActivities()
+    {
+        for (var i = 0; i < Activity.MaxActivities; i++)
+        {
+            Assert.Null(Up(new ActivityUpdate("a" + i, "t")));
+        }
+
+        Assert.NotNull(Up(new ActivityUpdate("one-too-many", "t")));
+        Assert.Null(Up(new ActivityUpdate("a0", "renamed"))); // updating an existing one is still fine
+    }
+
+    [Fact]
+    public void ActivitiesExpireSoACrashedAgentLeavesNothingBehind()
+    {
+        Up(new ActivityUpdate("run", "Running"));
+        Up(new ActivityUpdate("fin", "Finished", State: "done"));
+        Assert.Equal(2, ActivityStore.Load(Path_, Now).Count);
+        Assert.Equal(new[] { "run" }, ActivityStore.Load(Path_, Now + Activity.FinishedTtl + TimeSpan.FromSeconds(1)).Select(a => a.Id));
+        Assert.Empty(ActivityStore.Load(Path_, Now + Activity.ActiveTtl + TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public void WaitingNeedsAQuestionAndTheUserCanAnswerOnce()
+    {
+        Assert.NotNull(Up(new ActivityUpdate("d", "Deploy", State: "waiting_approval"))); // no question
+        Assert.Null(Up(new ActivityUpdate("d", "Deploy", State: "waiting_approval", Question: "Ship to prod?")));
+        Assert.Null(ActivityStore.Decide(Path_, "d", ApprovalDecision.Approved, Now));
+        Assert.Equal(ApprovalDecision.Approved, ActivityStore.Load(Path_, Now).Single().Decision);
+        Assert.NotNull(ActivityStore.Decide(Path_, "d", ApprovalDecision.Dismissed, Now)); // already answered
+        Assert.NotNull(ActivityStore.Decide(Path_, "missing", ApprovalDecision.Approved, Now));
+    }
+
+    [Fact]
+    public void AskingAgainStartsAFreshQuestion()
+    {
+        Up(new ActivityUpdate("d", "Deploy", State: "waiting_approval", Question: "Ship?"));
+        ActivityStore.Decide(Path_, "d", ApprovalDecision.Approved, Now);
+        Up(new ActivityUpdate("d", State: "running"));
+        Up(new ActivityUpdate("d", State: "waiting_approval", Question: "Really ship?"));
+        Assert.Equal(ApprovalDecision.None, ActivityStore.Load(Path_, Now).Single().Decision);
+    }
+
+    [Fact]
+    public void RemoveAndUnreadableFile()
+    {
+        Up(new ActivityUpdate("a", "t"));
+        Assert.True(ActivityStore.Remove(Path_, "a", Now));
+        Assert.False(ActivityStore.Remove(Path_, "a", Now));
+        File.WriteAllText(Path_, "{ not json");
+        Assert.Empty(ActivityStore.Load(Path_, Now));
+    }
+
+    // ----- MCP: the master flag -----
+
+    private McpServer Server() => new(new NyvoraTools(_dir, true, false, () => Now), "test");
+
+    private static JsonObject Call(McpServer s, string method, object? p = null) =>
+        (JsonObject)JsonNode.Parse(s.Handle(new JsonObject
+        {
+            ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = method,
+            ["params"] = p is null ? null : JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(p)),
+        }.ToJsonString())!)!;
+
+    private static string[] Names(McpServer s) =>
+        ((JsonArray)Call(s, "tools/list")["result"]!["tools"]!).Select(t => (string)t!["name"]!).ToArray();
+
+    private void SetFlag(bool on) => new AppSettings { ExperimentalFeatures = on }.Save(System.IO.Path.Combine(_dir, "settings.json"));
+
+    [Fact]
+    public void FlagOffHidesAndRefusesTheExperimentalTools()
+    {
+        var s = Server(); // no settings.json at all: the default is off
+        Assert.DoesNotContain("publish_activity", Names(s));
+        var r = Call(s, "tools/call", new { name = "publish_activity", arguments = new { id = "a", title = "t" } });
+        Assert.True((bool)r["result"]!["isError"]!);
+        Assert.Empty(ActivityStore.Load(Path_, Now));
+
+        SetFlag(false);
+        Assert.DoesNotContain("list_activities", Names(s));
+    }
+
+    [Fact]
+    public void FlagOnOffsTheToolsWithoutRestartingTheServer()
+    {
+        var s = Server();
+        SetFlag(true);
+        Assert.Contains("publish_activity", Names(s));
+        var r = Call(s, "tools/call", new { name = "publish_activity", arguments = new { id = "a", title = "Deploying", step = 1, steps = 3 } });
+        Assert.False((bool)r["result"]!["isError"]!);
+        var list = Call(s, "tools/call", new { name = "list_activities", arguments = new { } });
+        Assert.Contains("Deploying", (string)list["result"]!["content"]![0]!["text"]!);
+
+        SetFlag(false);
+        Assert.DoesNotContain("publish_activity", Names(s));
+        Assert.True((bool)Call(s, "tools/call", new { name = "list_activities", arguments = new { } })["result"]!["isError"]!);
+    }
+
+    [Fact]
+    public void ReadOnlyServerCannotPublishEvenWithTheFlagOn()
+    {
+        SetFlag(true);
+        var s = new McpServer(new NyvoraTools(_dir, false, false, () => Now), "test");
+        Assert.DoesNotContain("publish_activity", Names(s));
+        Assert.Contains("list_activities", Names(s));
+    }
+}

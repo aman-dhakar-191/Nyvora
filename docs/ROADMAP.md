@@ -3,7 +3,22 @@
 1. **Foundation / visual / window integration** — implemented in the first milestone; awaiting verification on Windows.
 2. **Reliability** — Core unit tests exist; add more manual-run evidence, then consider UI automation.
 3. **CI** — `.github/workflows/windows-build.yml` builds, tests, and publishes a *development* artifact (self-contained, unsigned, unpackaged).
-4. **Later, by usefulness** — notification summaries, quick actions, system info, media controls, clipboard utilities, optional AI, user-configurable appearance.
+4. **Experimental track** (see below) — agent activities, rule-based proactive nudges, an optional AI layer.
+5. **Later, by usefulness** — notification summaries, quick actions, system info, media controls, clipboard utilities, user-configurable appearance.
+
+## Experimental track
+
+Rule for all of it: everything lives behind one master flag, `ExperimentalFeatures` in `settings.json` (default **off**). With it off Nyvora behaves exactly as it does today and the experimental MCP tools are hidden and refused. Deterministic rules decide *when* the pill interrupts; AI, when enabled, only writes or classifies.
+
+| Phase | What | Status |
+|---|---|---|
+| 0 | Run the Windows manual checklist below; log failures | Pill confirmed running on Windows (screenshots); full checklist still unticked |
+| 1 | **Activity channel**: agents publish named, multi-step activities (`publish_activity`, `list_activities`, `clear_activity` MCP tools; `activities.json`; expiry so nothing lingers; approval question the agent can read back) | Core + MCP + tests done. **Pill/panel UI not built yet**, and no UI to flip the flag |
+| 2 | Rule engine for proactive nudges (extend `RecurringNudge` / `NotchSuggestions`); rate limits, per-rule mute, no new sensors without a per-signal opt-in | Not started |
+| 3 | Optional AI layer: `IAiProvider` in Core; OpenAI-compatible (covers Ollama and cloud) and Anthropic providers; one-time setup wizard; key in Windows Credential Locker; per-feature toggles; always falls back to plain text | Not started |
+| 4 | One-click built-in local model (evaluate Foundry Local; Windows AI APIs need package identity, which the unpackaged build lacks) | Not started |
+
+Open: the flag has no Settings toggle yet (edit `"ExperimentalFeatures": true` in `%APPDATA%\Nyvora\settings.json`); activities are not shown in the app until the Phase 1 UI lands.
 
 ## Manual verification checklist (Windows 10/11)
 
