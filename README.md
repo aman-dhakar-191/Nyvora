@@ -138,3 +138,6 @@ Nyvora ships `nyvora-mcp.exe` next to `Nyvora.exe`: a [Model Context Protocol](h
 - `--data-dir PATH` points it at another data folder (used by CI).
 - **A Claude skill** in `.claude/skills/nyvora/SKILL.md` teaches an agent how to use these tools well: look before adding, say what it changed, and show short progress messages on the notch and clear them when done. It is picked up automatically in this repository; to use it everywhere, copy the `nyvora` folder to `~/.claude/skills/` (Claude Code).
 
+## Experimental: agent activities
+
+Off by default. **Settings > AI agents > Experimental** turns on the master switch (`ExperimentalFeatures` in `settings.json`). With it off Nyvora behaves as before and the activity tools do not exist for agents. With it on, an AI agent connected through MCP can show named, multi-step work on the resting pill ("Deploying 2/4") and ask you to approve something: the pill opens without taking focus and the task list shows Approve / Dismiss under the add box. Several agents can be shown at once; unlike a notch message they do not overwrite each other. Activities expire by themselves (finished: 10 minutes, abandoned: 1 hour).

@@ -75,6 +75,8 @@
             </ui:HandButton>
         </Grid>
         <StackPanel Grid.Row="2" Spacing="8">
+            <!-- Experimental: what agents are doing, with Approve / Dismiss when one asks. Empty (and hidden) unless the master switch is on. -->
+            <StackPanel x:Name="ActivityCards" Visibility="Collapsed" Spacing="6" />
             <!-- While a slash command is being typed: what can come next (timers, tones), as chips you can click or Tab to. -->
             <StackPanel x:Name="CommandHints" Visibility="Collapsed" Spacing="4">
                 <TextBlock x:Name="CommandHintText" FontSize="11" Foreground="#FF8A8AA0" TextWrapping="Wrap" />

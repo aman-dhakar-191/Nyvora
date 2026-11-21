@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Nyvora.App.Services;
+using Nyvora.Core.Activities;
 using Nyvora.Core.Tasks;
 using Windows.System;
 using Windows.UI.Text;
@@ -38,6 +39,92 @@ public sealed partial class TasksPanel : UserControl
 
     /// <summary>The add box got "/notch text" (set the notch message) or a bare "/notch" (clear it).</summary>
     public event Action<string>? NotchRequested;
+
+    /// <summary>The user pressed Approve or Dismiss on an agent's question (activity id, answer).</summary>
+    public event Action<string, ApprovalDecision>? ActivityDecided;
+
+    /// <summary>The user removed an activity from the list.</summary>
+    public event Action<string>? ActivityRemoved;
+
+    /// <summary>Experimental: shows what agents are doing as small cards under the add box. An empty list hides them.</summary>
+    internal void SetActivities(IReadOnlyList<Activity> items)
+    {
+        ActivityCards.Children.Clear();
+        ActivityCards.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var a in items)
+        {
+            var asking = a.State == ActivityState.WaitingApproval && a.Decision == ApprovalDecision.None;
+            var progress = a.Step is { } s && a.Steps is { } n ? $"  {s}/{n}" : "";
+            var state = a.State switch
+            {
+                ActivityState.Done => "  ·  done",
+                ActivityState.Failed => "  ·  failed",
+                ActivityState.WaitingApproval when a.Decision == ApprovalDecision.Approved => "  ·  approved",
+                ActivityState.WaitingApproval when a.Decision == ApprovalDecision.Dismissed => "  ·  dismissed",
+                _ => "",
+            };
+            var lines = new StackPanel { Spacing = 2 };
+            lines.Children.Add(new TextBlock
+            {
+                Text = a.Title + progress + state,
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = a.State == ActivityState.Failed ? new SolidColorBrush(Color.FromArgb(0xFF, 0xFB, 0x71, 0x85)) : TextBrush,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            var sub = asking ? a.Question : a.Detail;
+            if (sub.Length > 0)
+            {
+                lines.Children.Add(new TextBlock { Text = sub, FontSize = 12, Foreground = asking ? DueBrush : MutedBrush, TextWrapping = TextWrapping.Wrap });
+            }
+
+            if (a.Source.Length > 0)
+            {
+                lines.Children.Add(new TextBlock { Text = a.Source, FontSize = 11, Foreground = MutedBrush });
+            }
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            if (asking)
+            {
+                var id = a.Id;
+                var approve = new HandButton { Content = "Approve", Padding = new Thickness(12, 3, 12, 3), MinHeight = 0 };
+                approve.Click += (_, _) => ActivityDecided?.Invoke(id, ApprovalDecision.Approved);
+                var dismiss = new HandButton { Content = "Dismiss", Padding = new Thickness(12, 3, 12, 3), MinHeight = 0 };
+                dismiss.Click += (_, _) => ActivityDecided?.Invoke(id, ApprovalDecision.Dismissed);
+                buttons.Children.Add(approve);
+                buttons.Children.Add(dismiss);
+            }
+            else
+            {
+                var id = a.Id;
+                var remove = new HandButton
+                {
+                    Content = new FontIcon { Glyph = "\uE711", FontSize = 10 },
+                    Padding = new Thickness(6),
+                    MinHeight = 0,
+                    BorderThickness = new Thickness(0),
+                    Background = new SolidColorBrush(Colors.Transparent),
+                };
+                ToolTipService.SetToolTip(remove, "Remove from the list");
+                remove.Click += (_, _) => ActivityRemoved?.Invoke(id);
+                buttons.Children.Add(remove);
+            }
+
+            var row = new Grid { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(lines);
+            Grid.SetColumn(buttons, 1);
+            row.Children.Add(buttons);
+            ActivityCards.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+                Padding = new Thickness(10, 8, 10, 8),
+                Child = row,
+            });
+        }
+    }
 
     public event Action? CollapseRequested;
 

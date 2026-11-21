@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Nyvora.App.Services;
 using Nyvora.App.Windowing;
+using Nyvora.Core.Activities;
 using Nyvora.Core.Animation;
 using Nyvora.Core.Settings;
 using Nyvora.Core.Storage;
@@ -177,6 +178,7 @@ public sealed partial class MainWindow : Window
         WatchNotch(queue);
         WatchSettingsTags(queue);
         Panel.NotchRequested += OnNotchCommand;
+        WatchActivities();
         _awayTimer = queue.CreateTimer();
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
         _awayTimer.Tick += (_, _) =>
@@ -624,7 +626,7 @@ public sealed partial class MainWindow : Window
 
         // A temporary message ("/notch ..." or an agent) takes the notch's place while it lasts; due and open come back after.
         // Nyvora's own progress (an update, a sync) comes first while it lasts, then a message someone set.
-        var note = new[] { _updateNote, _kekaNote, _syncNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
+        var note = new[] { _updateNote, _kekaNote, _syncNote, _activityNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
         if (note is not null)
         {
             RestingLabel.Text = note.Text;
@@ -800,6 +802,8 @@ public sealed partial class MainWindow : Window
                 changed = true;
             }
 
+            RefreshActivities(); // experimental: no-op while the master switch is off
+
             if (changed)
             {
                 UpdateBadge();
@@ -807,6 +811,82 @@ public sealed partial class MainWindow : Window
         };
         _notchExpiry.Start();
         UpdateBadge();
+    }
+
+    // ----- experimental: agent activities (master switch: AppSettings.ExperimentalFeatures, default off) -----
+
+    private static readonly string ActivitiesPath = Path.Combine(DataFolders.Active(), ActivityStore.FileName);
+    private NotchMessage? _activityNote;
+    private string _activitySignature = "";
+    private readonly HashSet<string> _approvalsAnnounced = new();
+
+    private void WatchActivities()
+    {
+        Side.SetExperimental(_settings.Current.ExperimentalFeatures);
+        Side.ExperimentalChanged += on =>
+        {
+            _settings.Current.ExperimentalFeatures = on;
+            _settings.Save();
+            Log.Info("Experimental features " + (on ? "on" : "off"));
+            RefreshActivities();
+        };
+        Panel.ActivityDecided += (id, decision) =>
+        {
+            var error = ActivityStore.Decide(ActivitiesPath, id, decision, DateTimeOffset.Now);
+            if (error is not null)
+            {
+                Log.Info("Activity answer not recorded: " + error);
+            }
+
+            RefreshActivities();
+        };
+        Panel.ActivityRemoved += id =>
+        {
+            ActivityStore.Remove(ActivitiesPath, id, DateTimeOffset.Now);
+            RefreshActivities();
+        };
+        RefreshActivities();
+    }
+
+    /// <summary>
+    /// Reads activities.json (once a second, from the expiry timer) and updates the resting pill and the panel cards.
+    /// With the master switch off it shows nothing and never opens the pill.
+    /// </summary>
+    private void RefreshActivities()
+    {
+        var now = DateTimeOffset.Now;
+        var items = _settings.Current.ExperimentalFeatures ? ActivityStore.Load(ActivitiesPath, now) : Array.Empty<Nyvora.Core.Activities.Activity>();
+        var note = ActivityNotch.For(items, now);
+        var signature = string.Join("|", items.Select(a => $"{a.Id}:{a.Title}:{a.State}:{a.Step}/{a.Steps}:{a.Detail}:{a.Question}:{a.Decision}:{a.Source}"));
+
+        var noteChanged = note?.Text != _activityNote?.Text || note?.Tone != _activityNote?.Tone;
+        _activityNote = note;
+        if (signature != _activitySignature)
+        {
+            _activitySignature = signature;
+            Panel.SetActivities(items);
+        }
+
+        // A new question opens the pill once, without taking focus, so it is not missed.
+        var announce = false;
+        foreach (var a in items)
+        {
+            if (a.State == ActivityState.WaitingApproval && a.Decision == ApprovalDecision.None && _approvalsAnnounced.Add(a.Id + "|" + a.Question))
+            {
+                announce = true;
+            }
+        }
+
+        if (announce)
+        {
+            Log.Info("An agent is asking for approval");
+            ExpandPassively();
+        }
+
+        if (noteChanged)
+        {
+            UpdateBadge();
+        }
     }
 
     /// <summary>The add box's "/notch" command: text sets the message, nothing clears it.</summary>

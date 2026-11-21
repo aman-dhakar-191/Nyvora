@@ -13,7 +13,7 @@ Rule for all of it: everything lives behind one master flag, `ExperimentalFeatur
 | Phase | What | Status |
 |---|---|---|
 | 0 | Run the Windows manual checklist below; log failures | Pill confirmed running on Windows (screenshots); full checklist still unticked |
-| 1 | **Activity channel**: agents publish named, multi-step activities (`publish_activity`, `list_activities`, `clear_activity` MCP tools; `activities.json`; expiry so nothing lingers; approval question the agent can read back) | Core + MCP + tests done. **Pill/panel UI not built yet**, and no UI to flip the flag |
+| 1 | **Activity channel**: agents publish named, multi-step activities (`publish_activity`, `list_activities`, `clear_activity` MCP tools; `activities.json`; expiry so nothing lingers; approval question the agent can read back) | Core + MCP + tests done. Pill text, panel cards (Approve / Dismiss) and a Settings toggle written; **not yet run on Windows** |
 | 2 | Rule engine for proactive nudges (extend `RecurringNudge` / `NotchSuggestions`); rate limits, per-rule mute, no new sensors without a per-signal opt-in | Not started |
 | 3 | Optional AI layer: `IAiProvider` in Core; OpenAI-compatible (covers Ollama and cloud) and Anthropic providers; one-time setup wizard; key in Windows Credential Locker; per-feature toggles; always falls back to plain text | Not started |
 | 4 | One-click built-in local model (evaluate Foundry Local; Windows AI APIs need package identity, which the unpackaged build lacks) | Not started |

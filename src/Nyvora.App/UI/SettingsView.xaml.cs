@@ -29,6 +29,9 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? StatusReminderChanged;
 
+    /// <summary>The master switch for experimental features (agent activities) was clicked.</summary>
+    public event Action<bool>? ExperimentalChanged;
+
     private HotkeySpec _hotkey = HotkeySpec.Default;
     private bool _capturing;
 
@@ -367,6 +370,12 @@ public sealed partial class SettingsView : UserControl
 
     private void OnReminderClick(object sender, RoutedEventArgs e) =>
         StatusReminderChanged?.Invoke(ReminderToggle.IsChecked == true);
+
+    private void OnExperimentalClick(object sender, RoutedEventArgs e) =>
+        ExperimentalChanged?.Invoke(ExperimentalToggle.IsChecked == true);
+
+    /// <summary>Shows the saved state of the master switch (setting IsChecked in code does not raise Click).</summary>
+    internal void SetExperimental(bool on) => ExperimentalToggle.IsChecked = on;
 
     private void RefreshUpdate()
     {

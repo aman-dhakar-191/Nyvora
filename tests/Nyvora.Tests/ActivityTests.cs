@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Nyvora.Core.Activities;
 using Nyvora.Core.Settings;
+using Nyvora.Core.Tasks;
 using Nyvora.Mcp;
 using Xunit;
 
@@ -160,5 +161,73 @@ public sealed class ActivityTests : IDisposable
         var s = new McpServer(new NyvoraTools(_dir, false, false, () => Now), "test");
         Assert.DoesNotContain("publish_activity", Names(s));
         Assert.Contains("list_activities", Names(s));
+    }
+}
+
+public class ActivityNotchTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 21, 12, 0, 0, TimeSpan.Zero);
+
+    private static Activity A(string id, string title, ActivityState state = ActivityState.Running, int? step = null, int? steps = null,
+        ApprovalDecision decision = ApprovalDecision.None, int minutesAgo = 0) => new()
+    {
+        Id = id, Title = title, State = state, Step = step, Steps = steps, Decision = decision,
+        Question = state == ActivityState.WaitingApproval ? "ok?" : "",
+        UpdatedAt = Now.AddMinutes(-minutesAgo), ExpiresAt = Now.AddHours(1),
+    };
+
+    [Fact]
+    public void NothingMeansNoMessage()
+    {
+        Assert.Null(ActivityNotch.For(Array.Empty<Activity>(), Now));
+        var expired = A("a", "t"); expired.ExpiresAt = Now.AddSeconds(-1);
+        Assert.Null(ActivityNotch.For(new[] { expired }, Now));
+    }
+
+    [Fact]
+    public void OneRunningShowsTitleAndProgress()
+    {
+        var m = ActivityNotch.For(new[] { A("a", "Deploying", step: 2, steps: 4) }, Now)!;
+        Assert.Equal(("Deploying 2/4", NotchTone.Info), (m.Text, m.Tone));
+        Assert.Equal("Deploying", ActivityNotch.For(new[] { A("a", "Deploying") }, Now)!.Text);
+    }
+
+    [Fact]
+    public void SeveralRunningAreCounted()
+    {
+        Assert.Equal("2 activities running", ActivityNotch.For(new[] { A("a", "One"), A("b", "Two") }, Now)!.Text);
+    }
+
+    [Fact]
+    public void AQuestionOutranksEverythingAndIsAmber()
+    {
+        var m = ActivityNotch.For(new[] { A("a", "Build"), A("b", "Deploy", ActivityState.WaitingApproval) }, Now)!;
+        Assert.Equal(("Approve: Deploy", NotchTone.Warning), (m.Text, m.Tone));
+        var two = ActivityNotch.For(new[] { A("a", "X", ActivityState.WaitingApproval), A("b", "Y", ActivityState.WaitingApproval) }, Now)!;
+        Assert.Equal("2 need your approval", two.Text);
+    }
+
+    [Fact]
+    public void AnAnsweredQuestionCountsAsRunning()
+    {
+        var m = ActivityNotch.For(new[] { A("a", "Deploy", ActivityState.WaitingApproval, decision: ApprovalDecision.Approved) }, Now)!;
+        Assert.Equal(("Deploy", NotchTone.Info), (m.Text, m.Tone));
+    }
+
+    [Fact]
+    public void FinishedShowsTheMostRecentWithItsTone()
+    {
+        var done = ActivityNotch.For(new[] { A("a", "Old", ActivityState.Failed, minutesAgo: 5), A("b", "New", ActivityState.Done) }, Now)!;
+        Assert.Equal(("New: done", NotchTone.Success), (done.Text, done.Tone));
+        var failed = ActivityNotch.For(new[] { A("a", "Build", ActivityState.Failed) }, Now)!;
+        Assert.Equal(("Build: failed", NotchTone.Error), (failed.Text, failed.Tone));
+    }
+
+    [Fact]
+    public void LongTextFitsTheNotch()
+    {
+        var m = ActivityNotch.For(new[] { A("a", new string('x', 40), step: 10, steps: 12) }, Now)!;
+        Assert.Equal(NotchMessage.MaxLength, m.Text.Length);
+        Assert.EndsWith("…", m.Text);
     }
 }
