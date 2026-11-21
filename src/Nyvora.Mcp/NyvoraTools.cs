@@ -36,7 +36,13 @@ public sealed class NyvoraTools
     {
         /// <summary>Only offered (and only runnable) while "Experimental features" is on in Nyvora's settings.</summary>
         public bool Experimental { get; init; }
+
+        /// <summary>Runs without holding the task-file lock (it may wait for a while, and must not block the app's saves). It only reads.</summary>
+        public bool Unlocked { get; init; }
     }
+
+    /// <summary>Longest a single wait_for_decision call blocks: under the minute most MCP clients give a tool call.</summary>
+    public const int MaxWaitSeconds = 50;
 
     private readonly string _tasksPath;
     private readonly string _settingsPath;
@@ -116,6 +122,11 @@ public sealed class NyvoraTools
 
         try
         {
+            if (tool.Unlocked)
+            {
+                return new ToolResult(tool.Run(args, Load(), _clock()), false);
+            }
+
             var now = _clock();
             using var gate = TaskFileLock.Acquire(_tasksPath, TimeSpan.FromSeconds(5));
             if (!gate.Acquired)
@@ -228,7 +239,7 @@ public sealed class NyvoraTools
             (_, _, now) => Json(new JsonObject { ["activities"] = new JsonArray(ActivityStore.Load(_activitiesPath, now).Select(a => (JsonNode)DescribeActivity(a)).ToArray()) }))
         { Experimental = true },
         new Tool("publish_activity",
-            $"Show or update a named activity on Nyvora's pill (experimental), for example 'Deploying v2, step 2 of 4'. Use a stable id to update the same activity. Fields you leave out keep their value. Set state to waiting_approval with a question to ask the user to approve something, then read the answer with list_activities. Finished activities disappear by themselves after {(int)Activity.FinishedTtl.TotalMinutes} minutes; an activity not updated for {(int)Activity.ActiveTtl.TotalMinutes} hour is treated as abandoned.",
+            $"Show or update a named activity on Nyvora's pill (experimental), for example 'Deploying v2, step 2 of 4'. Use a stable id to update the same activity. Fields you leave out keep their value. Set state to waiting_approval with a question to ask the user to approve something, then call wait_for_decision with the same id: it waits for the answer, so you do not need to be told to check. Finished activities disappear by themselves after {(int)Activity.FinishedTtl.TotalMinutes} minutes; an activity not updated for {(int)Activity.ActiveTtl.TotalMinutes} hour is treated as abandoned.",
             ToolAccess.Write,
             Schema(("id", Str($"Stable id, up to {Activity.MaxId} letters, digits, dots, dashes or underscores")),
                 ("title", Str($"Short name, up to {Activity.MaxTitle} characters; required when it starts")),
@@ -244,9 +255,59 @@ public sealed class NyvoraTools
                     RequireStr(a, "id"), OptionalStr(a, "title"), OptionalStr(a, "state"),
                     OptionalInt(a, "step"), OptionalInt(a, "steps"),
                     OptionalStr(a, "detail"), OptionalStr(a, "question"), OptionalStr(a, "source")), now, out var activity);
-                return error is null ? Json(DescribeActivity(activity!)) : throw new ToolError(error);
+                if (error is not null)
+                {
+                    throw new ToolError(error);
+                }
+
+                var node = DescribeActivity(activity!);
+                if (activity!.State == ActivityState.WaitingApproval && activity.Decision == ApprovalDecision.None)
+                {
+                    node["next"] = "The user has been asked. Call wait_for_decision with this id to wait for the answer, and do not continue the guarded step until it says approved.";
+                }
+
+                return Json(node);
             })
         { Experimental = true },
+        new Tool("wait_for_decision",
+            $"Wait for the user's answer to a waiting_approval activity (experimental). Returns as soon as they approve or dismiss, or after up to {MaxWaitSeconds} seconds (default 30) with timedOut=true: call it again to keep waiting. Use it right after publish_activity with a question; do not carry on with the guarded step until the decision is approved.",
+            ToolAccess.Read,
+            Schema(("id", Str("The activity id you published")),
+                ("seconds", Int($"Optional: how long to wait, 0 to {MaxWaitSeconds} (default 30); 0 just checks once"))).Require("id"),
+            (a, _, _) =>
+            {
+                var id = RequireStr(a, "id");
+                var wait = TimeSpan.FromSeconds(Math.Clamp(OptionalInt(a, "seconds") ?? 30, 0, MaxWaitSeconds));
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                while (true)
+                {
+                    var current = ActivityStore.Load(_activitiesPath, _clock()).FirstOrDefault(x => x.Id == id)
+                        ?? throw new ToolError("There is no activity with that id (it may have expired or been removed).");
+                    if (current.State != ActivityState.WaitingApproval)
+                    {
+                        var info = DescribeActivity(current);
+                        info["timedOut"] = false;
+                        info["note"] = "This activity is not waiting for an answer.";
+                        return Json(info);
+                    }
+
+                    var answered = current.Decision != ApprovalDecision.None;
+                    if (answered || timer.Elapsed >= wait)
+                    {
+                        var info = DescribeActivity(current);
+                        info["timedOut"] = !answered;
+                        if (!answered)
+                        {
+                            info["next"] = "No answer yet. Call wait_for_decision again to keep waiting.";
+                        }
+
+                        return Json(info);
+                    }
+
+                    Thread.Sleep(250);
+                }
+            })
+        { Experimental = true, Unlocked = true },
         new Tool("clear_activity", "Remove one of your activities from Nyvora's pill (experimental), for example when your work ends.", ToolAccess.Write,
             Schema(("id", Str("The activity id"))).Require("id"),
             (a, _, now) =>

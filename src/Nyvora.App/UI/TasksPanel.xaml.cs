@@ -49,6 +49,7 @@ public sealed partial class TasksPanel : UserControl
     /// <summary>Experimental: shows what agents are doing as small cards under the add box. An empty list hides them.</summary>
     internal void SetActivities(IReadOnlyList<Activity> items)
     {
+        _activityItems = items;
         ActivityCards.Children.Clear();
         ActivityCards.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var a in items)
@@ -124,6 +125,92 @@ public sealed partial class TasksPanel : UserControl
                 Child = row,
             });
         }
+
+        if (IsAsking)
+        {
+            RenderApproval(); // moves on when a question was answered, or is gone
+        }
+    }
+
+    // ----- experimental: the approval card (like the reminder card, but for an agent's question) -----
+
+    private IReadOnlyList<Activity> _activityItems = Array.Empty<Activity>();
+    private readonly List<string> _approvalQueue = new();
+
+    public bool IsAsking => _approvalQueue.Count > 0;
+
+    /// <summary>Every question has been answered or is gone: the owner should close the card.</summary>
+    public event Action? ApprovalEnded;
+
+    /// <summary>The user chose "All tasks" on the approval card.</summary>
+    public event Action? ApprovalOpenAllRequested;
+
+    /// <summary>Shows only these questions, one at a time, as a card instead of the list.</summary>
+    internal void ShowApproval(IEnumerable<string> ids)
+    {
+        _approvalQueue.Clear();
+        _approvalQueue.AddRange(ids);
+        RenderApproval();
+    }
+
+    public void ClearApproval()
+    {
+        _approvalQueue.Clear();
+        ApprovalView.Visibility = Visibility.Collapsed;
+        if (!IsFocusing)
+        {
+            TasksView.Visibility = Visibility.Visible;
+        }
+    }
+
+    private Activity? AskedItem() =>
+        _approvalQueue.Count == 0
+            ? null
+            : _activityItems.FirstOrDefault(a => a.Id == _approvalQueue[0] && a.State == ActivityState.WaitingApproval && a.Decision == ApprovalDecision.None);
+
+    private void RenderApproval()
+    {
+        while (_approvalQueue.Count > 0 && AskedItem() is null)
+        {
+            _approvalQueue.RemoveAt(0); // answered, expired or no longer asking
+        }
+
+        if (AskedItem() is not { } a)
+        {
+            ClearApproval();
+            ApprovalEnded?.Invoke();
+            return;
+        }
+
+        TasksView.Visibility = Visibility.Collapsed;
+        FocusView.Visibility = Visibility.Collapsed;
+        ApprovalView.Visibility = Visibility.Visible;
+        ApprovalMore.Text = _approvalQueue.Count > 1 ? $"+{_approvalQueue.Count - 1} more" : "";
+        ApprovalTitle.Text = a.Title;
+        ApprovalQuestion.Text = a.Question;
+        ApprovalSource.Text = a.Source.Length > 0 ? "from " + a.Source : "";
+    }
+
+    private void OnApprovalApprove(object sender, RoutedEventArgs e)
+    {
+        if (AskedItem() is { } a)
+        {
+            ActivityDecided?.Invoke(a.Id, ApprovalDecision.Approved);
+        }
+    }
+
+    private void OnApprovalDismiss(object sender, RoutedEventArgs e)
+    {
+        if (AskedItem() is { } a)
+        {
+            ActivityDecided?.Invoke(a.Id, ApprovalDecision.Dismissed);
+        }
+    }
+
+    private void OnApprovalOpenAll(object sender, RoutedEventArgs e)
+    {
+        ClearApproval();
+        ApprovalOpenAllRequested?.Invoke();
     }
 
     public event Action? CollapseRequested;

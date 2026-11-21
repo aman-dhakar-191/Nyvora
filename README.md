@@ -141,3 +141,7 @@ Nyvora ships `nyvora-mcp.exe` next to `Nyvora.exe`: a [Model Context Protocol](h
 ## Experimental: agent activities
 
 Off by default. **Settings > AI agents > Experimental** turns on the master switch (`ExperimentalFeatures` in `settings.json`). With it off Nyvora behaves as before and the activity tools do not exist for agents. With it on, an AI agent connected through MCP can show named, multi-step work on the resting pill ("Deploying 2/4") and ask you to approve something: the pill opens without taking focus and the task list shows Approve / Dismiss under the add box. Several agents can be shown at once; unlike a notch message they do not overwrite each other. Activities expire by themselves (finished: 10 minutes, abandoned: 1 hour).
+
+An approval question opens its own card (like a reminder), not the task list: Approve, Dismiss, or All tasks. The agent calls `wait_for_decision` and gets your answer the moment you give it.
+
+**Nudge rules** (same switch): a few plain rules (overdue backlog, end-of-day check, today's plan, forgotten high priority) decide when the pill may speak up, with global limits and a mute tick for each in Settings. Each nudge names the rule that fired. No AI is involved.

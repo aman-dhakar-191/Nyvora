@@ -16,6 +16,9 @@ public sealed class AppSettings
     /// </summary>
     public bool ExperimentalFeatures { get; set; }
 
+    /// <summary>Experimental: ids of nudge rules the user switched off (see <see cref="Rules.NudgeRules"/>). Empty means all rules are on.</summary>
+    public List<string> MutedNudgeRules { get; set; } = new();
+
     /// <summary>Keep the pill above other windows. Exclusive-fullscreen apps and games still cover it.</summary>
     public bool AlwaysOnTop { get; set; } = true;
 

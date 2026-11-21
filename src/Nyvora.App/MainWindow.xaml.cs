@@ -7,6 +7,7 @@ using Nyvora.App.Services;
 using Nyvora.App.Windowing;
 using Nyvora.Core.Activities;
 using Nyvora.Core.Animation;
+using Nyvora.Core.Rules;
 using Nyvora.Core.Settings;
 using Nyvora.Core.Storage;
 using Nyvora.Core.State;
@@ -55,6 +56,7 @@ public sealed partial class MainWindow : Window
     private bool _passiveExpand;
     private bool _focusMode; // a reminder card is showing instead of the list
     private static readonly SizeD FocusSize = new(380, 200);
+    private static readonly SizeD ApprovalSize = new(400, 250);
 
     private bool _compact;
     private readonly Windows.UI.ViewManagement.UISettings _ui = new();
@@ -62,7 +64,7 @@ public sealed partial class MainWindow : Window
     /// <summary>The list's size: the saved (resizable) size, or the fixed narrow one in compact mode.</summary>
     private SizeD LayoutSize => _compact ? PillAnimator.CompactSize : _expandedSize;
 
-    private SizeD ExpandedTarget => _focusMode ? FocusSize : LayoutSize;
+    private SizeD ExpandedTarget => _focusMode ? (Panel.IsAsking ? ApprovalSize : FocusSize) : LayoutSize;
     private int _frames;
     private bool _focusInputWhenOpen;
 
@@ -167,6 +169,22 @@ public sealed partial class MainWindow : Window
             _focusMode = false;
             ApplyPanelSize();
             Start(LayoutSize, PillAnimator.SideDuration); // grow from the card to the full list
+            _host.Focus();
+            Panel.FocusInput();
+        };
+        Panel.ApprovalEnded += () =>
+        {
+            if (_focusMode)
+            {
+                _focusMode = false;
+                Collapse("approval answered");
+            }
+        };
+        Panel.ApprovalOpenAllRequested += () =>
+        {
+            _focusMode = false;
+            ApplyPanelSize();
+            Start(LayoutSize, PillAnimator.SideDuration);
             _host.Focus();
             Panel.FocusInput();
         };
@@ -376,6 +394,7 @@ public sealed partial class MainWindow : Window
     private void CheckReminders()
     {
         CheckStatusNudge();
+        CheckRules();
         CheckTimesheetPrompts();
         var fired = _tasks.TakePendingNotifications(DateTimeOffset.Now);
         UpdateBadge();
@@ -594,6 +613,30 @@ public sealed partial class MainWindow : Window
             _passiveExpand = true;
             _machine.RequestExpand();
         }
+    }
+
+    // ----- experimental: rule-based nudges (master switch: ExperimentalFeatures). Rules decide when; nothing here uses AI. -----
+
+    private readonly RuleEngine _rules = new(NudgeRules.All, DateTimeOffset.Now);
+
+    private void CheckRules()
+    {
+        // Only while the pill is resting, so a nudge never replaces what you are typing or reading.
+        if (!_settings.Current.ExperimentalFeatures || _machine.State != PillState.Resting)
+        {
+            return;
+        }
+
+        var muted = new HashSet<string>(_settings.Current.MutedNudgeRules, StringComparer.OrdinalIgnoreCase);
+        var nudge = _rules.Evaluate(new NudgeContext(DateTimeOffset.Now, _tasks.Items), muted);
+        if (nudge is null)
+        {
+            return;
+        }
+
+        Log.Info($"Nudge from rule '{nudge.RuleId}': {nudge.Message}");
+        Panel.ShowNudge($"{nudge.Message}  ·  rule: {nudge.RuleName}");
+        ExpandPassively();
     }
 
     private void CheckStatusNudge()
@@ -823,6 +866,7 @@ public sealed partial class MainWindow : Window
     private void WatchActivities()
     {
         Side.SetExperimental(_settings.Current.ExperimentalFeatures);
+        Side.AttachNudgeRules(NudgeRules.All, _settings.Current.MutedNudgeRules, _settings.Save);
         Side.ExperimentalChanged += on =>
         {
             _settings.Current.ExperimentalFeatures = on;
@@ -867,20 +911,32 @@ public sealed partial class MainWindow : Window
             Panel.SetActivities(items);
         }
 
-        // A new question opens the pill once, without taking focus, so it is not missed.
-        var announce = false;
-        foreach (var a in items)
+        // A new question gets its own card (like a reminder), opening the pill without taking focus. If a reminder card is
+        // showing it waits its turn; if the list is already open the cards in the list show it.
+        var asking = items.Where(a => a.State == ActivityState.WaitingApproval && a.Decision == ApprovalDecision.None
+            && !_approvalsAnnounced.Contains(a.Id + "|" + a.Question)).ToList();
+        if (asking.Count > 0)
         {
-            if (a.State == ActivityState.WaitingApproval && a.Decision == ApprovalDecision.None && _approvalsAnnounced.Add(a.Id + "|" + a.Question))
+            if (_machine.State is PillState.Resting or PillState.Collapsing && !Panel.IsFocusing && !Panel.IsAsking)
             {
-                announce = true;
-            }
-        }
+                foreach (var a in asking)
+                {
+                    _approvalsAnnounced.Add(a.Id + "|" + a.Question);
+                }
 
-        if (announce)
-        {
-            Log.Info("An agent is asking for approval");
-            ExpandPassively();
+                Log.Info($"{asking.Count} agent question(s) waiting for approval");
+                _focusMode = true;
+                Panel.ShowApproval(asking.Select(a => a.Id));
+                ApplyPanelSize();
+                ExpandPassively();
+            }
+            else if (_machine.State == PillState.Expanded && !_focusMode)
+            {
+                foreach (var a in asking)
+                {
+                    _approvalsAnnounced.Add(a.Id + "|" + a.Question); // the list is open: its cards show the question
+                }
+            }
         }
 
         if (noteChanged)
@@ -1161,6 +1217,7 @@ public sealed partial class MainWindow : Window
             case PillState.Resting:
                 Panel.ClearNudge();
                 Panel.ClearFocus();
+                Panel.ClearApproval();
                 Panel.ResetView();
                 _focusMode = false;
                 _settingsOpen = false;

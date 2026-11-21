@@ -231,3 +231,102 @@ public class ActivityNotchTests
         Assert.EndsWith("…", m.Text);
     }
 }
+
+public sealed class WaitForDecisionTests : IDisposable
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 21, 12, 0, 0, TimeSpan.Zero);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "nyvora-wait-" + Guid.NewGuid().ToString("N"));
+    private string ActPath => Path.Combine(_dir, ActivityStore.FileName);
+
+    public WaitForDecisionTests()
+    {
+        Directory.CreateDirectory(_dir);
+        new AppSettings { ExperimentalFeatures = true }.Save(Path.Combine(_dir, "settings.json"));
+    }
+
+    public void Dispose() => Directory.Delete(_dir, true);
+
+    private McpServer Server(bool write = true) => new(new NyvoraTools(_dir, write, false, () => Now), "test");
+
+    private static JsonObject Call(McpServer s, string name, object args)
+    {
+        var msg = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = "tools/call",
+            ["params"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(new { name, arguments = args })) };
+        return (JsonObject)JsonNode.Parse(s.Handle(msg.ToJsonString())!)!;
+    }
+
+    private static bool IsError(JsonObject r) => (bool)r["result"]!["isError"]!;
+
+    private static JsonObject Body(JsonObject r) => (JsonObject)JsonNode.Parse((string)r["result"]!["content"]![0]!["text"]!)!;
+
+    private void Ask(string id = "d") =>
+        Assert.Null(ActivityStore.Upsert(ActPath, new ActivityUpdate(id, "Deploy", State: "waiting_approval", Question: "Ship?"), Now, out _));
+
+    [Fact]
+    public void PublishingAQuestionTellsTheAgentToWait()
+    {
+        var r = Call(Server(), "publish_activity", new { id = "d", title = "Deploy", state = "waiting_approval", question = "Ship?" });
+        Assert.False(IsError(r));
+        Assert.Contains("wait_for_decision", (string)Body(r)["next"]!);
+        Assert.Null(Body(Call(Server(), "publish_activity", new { id = "e", title = "Build" }))["next"]);
+    }
+
+    [Fact]
+    public void ReturnsAtOnceWhenAlreadyAnswered()
+    {
+        Ask();
+        Assert.Null(ActivityStore.Decide(ActPath, "d", ApprovalDecision.Approved, Now));
+        var b = Body(Call(Server(), "wait_for_decision", new { id = "d", seconds = 5 }));
+        Assert.Equal("approved", (string)b["decision"]!);
+        Assert.False((bool)b["timedOut"]!);
+    }
+
+    [Fact]
+    public void TimesOutWithAHintToCallAgain()
+    {
+        Ask();
+        var b = Body(Call(Server(), "wait_for_decision", new { id = "d", seconds = 0 }));
+        Assert.Equal("none", (string)b["decision"]!);
+        Assert.True((bool)b["timedOut"]!);
+        Assert.Contains("again", (string)b["next"]!);
+    }
+
+    [Fact]
+    public void WaitsAndPicksUpAnAnswerGivenWhileWaiting()
+    {
+        Ask();
+        var answer = Task.Run(async () =>
+        {
+            await Task.Delay(700);
+            ActivityStore.Decide(ActPath, "d", ApprovalDecision.Dismissed, Now);
+        });
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var b = Body(Call(Server(), "wait_for_decision", new { id = "d", seconds = 10 }));
+        answer.Wait();
+        Assert.Equal("dismissed", (string)b["decision"]!);
+        Assert.True(started.Elapsed < TimeSpan.FromSeconds(8)); // it did not sit out the full wait
+    }
+
+    [Fact]
+    public void UnknownOrNotWaitingActivities()
+    {
+        Assert.True(IsError(Call(Server(), "wait_for_decision", new { id = "nope", seconds = 0 })));
+        Assert.Null(ActivityStore.Upsert(ActPath, new ActivityUpdate("r", "Run"), Now, out _));
+        var b = Body(Call(Server(), "wait_for_decision", new { id = "r", seconds = 0 }));
+        Assert.False((bool)b["timedOut"]!);
+        Assert.Contains("not waiting", (string)b["note"]!);
+    }
+
+    [Fact]
+    public void IsReadOnlyAndExperimental()
+    {
+        // A read-only server may wait (it changes nothing)...
+        var listed = ((JsonArray)((JsonObject)JsonNode.Parse(Server(write: false).Handle("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""")!)!)["result"]!["tools"]!)
+            .Select(t => (string)t!["name"]!);
+        Assert.Contains("wait_for_decision", listed);
+        Assert.DoesNotContain("publish_activity", listed);
+        // ...but with the master flag off the tool is refused.
+        new AppSettings { ExperimentalFeatures = false }.Save(Path.Combine(_dir, "settings.json"));
+        Assert.True(IsError(Call(Server(), "wait_for_decision", new { id = "d", seconds = 0 })));
+    }
+}
