@@ -131,6 +131,16 @@
                         <TextBox x:Name="McpConfig" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas"
                                  FontSize="11" MinHeight="120" />
                         <ui:HandButton x:Name="McpCopy" Content="Copy config" Click="OnCopyMcp" HorizontalAlignment="Left" />
+
+                        <TextBlock Text="Experimental" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" Margin="0,8,0,0" />
+                        <ui:HandCheckBox x:Name="ExperimentalToggle" MinWidth="0" Click="OnExperimentalClick"
+                                         Content="Show agent activities on the pill, and let agents ask for approval" />
+                        <TextBlock Text="Nudge rules (experimental)" FontSize="12" FontWeight="SemiBold" Foreground="#FF9A9AB0" Margin="0,8,0,0" />
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Plain rules, no AI, decide when the pill may speak up: not in the first 10 minutes, only 8:00 to 20:00, at least 45 minutes apart, at most 4 a day. Untick a rule to mute it. Each nudge says which rule fired." />
+                        <StackPanel x:Name="NudgeRulesPanel" Spacing="6" />
+                        <TextBlock FontSize="12" Foreground="#FF6E6E85" TextWrapping="Wrap"
+                                   Text="Off by default. While it is off Nyvora works exactly as before and agents cannot use the activity tools. Turning it on lets an agent show named, multi-step work on the pill and ask you to approve something; you answer in the task list." />
                     </StackPanel>
                 </Border>
 

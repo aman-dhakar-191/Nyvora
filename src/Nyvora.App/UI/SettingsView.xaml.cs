@@ -29,6 +29,9 @@ public sealed partial class SettingsView : UserControl
 
     public event Action<bool>? StatusReminderChanged;
 
+    /// <summary>The master switch for experimental features (agent activities) was clicked.</summary>
+    public event Action<bool>? ExperimentalChanged;
+
     private HotkeySpec _hotkey = HotkeySpec.Default;
     private bool _capturing;
 
@@ -367,6 +370,39 @@ public sealed partial class SettingsView : UserControl
 
     private void OnReminderClick(object sender, RoutedEventArgs e) =>
         StatusReminderChanged?.Invoke(ReminderToggle.IsChecked == true);
+
+    private void OnExperimentalClick(object sender, RoutedEventArgs e) =>
+        ExperimentalChanged?.Invoke(ExperimentalToggle.IsChecked == true);
+
+    /// <summary>Lists the nudge rules with a tick each; unticking one mutes it (its id goes into <paramref name="muted"/>, then <paramref name="save"/>).</summary>
+    internal void AttachNudgeRules(IReadOnlyList<Nyvora.Core.Rules.INudgeRule> rules, List<string> muted, Action save)
+    {
+        NudgeRulesPanel.Children.Clear();
+        foreach (var rule in rules)
+        {
+            var box = new HandCheckBox
+            {
+                Content = rule.Name + "  ·  " + rule.Description,
+                IsChecked = !muted.Contains(rule.Id, StringComparer.OrdinalIgnoreCase),
+                MinWidth = 0,
+            };
+            var id = rule.Id;
+            box.Click += (_, _) =>
+            {
+                muted.RemoveAll(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase));
+                if (box.IsChecked != true)
+                {
+                    muted.Add(id);
+                }
+
+                save();
+            };
+            NudgeRulesPanel.Children.Add(box);
+        }
+    }
+
+    /// <summary>Shows the saved state of the master switch (setting IsChecked in code does not raise Click).</summary>
+    internal void SetExperimental(bool on) => ExperimentalToggle.IsChecked = on;
 
     private void RefreshUpdate()
     {

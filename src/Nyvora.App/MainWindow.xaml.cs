@@ -5,7 +5,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Nyvora.App.Services;
 using Nyvora.App.Windowing;
+using Nyvora.Core.Activities;
 using Nyvora.Core.Animation;
+using Nyvora.Core.Rules;
 using Nyvora.Core.Settings;
 using Nyvora.Core.Storage;
 using Nyvora.Core.State;
@@ -54,6 +56,7 @@ public sealed partial class MainWindow : Window
     private bool _passiveExpand;
     private bool _focusMode; // a reminder card is showing instead of the list
     private static readonly SizeD FocusSize = new(380, 200);
+    private static readonly SizeD ApprovalSize = new(400, 220);
 
     private bool _compact;
     private readonly Windows.UI.ViewManagement.UISettings _ui = new();
@@ -61,7 +64,7 @@ public sealed partial class MainWindow : Window
     /// <summary>The list's size: the saved (resizable) size, or the fixed narrow one in compact mode.</summary>
     private SizeD LayoutSize => _compact ? PillAnimator.CompactSize : _expandedSize;
 
-    private SizeD ExpandedTarget => _focusMode ? FocusSize : LayoutSize;
+    private SizeD ExpandedTarget => _focusMode ? (Panel.IsAsking ? ApprovalSize : FocusSize) : LayoutSize;
     private int _frames;
     private bool _focusInputWhenOpen;
 
@@ -169,6 +172,22 @@ public sealed partial class MainWindow : Window
             _host.Focus();
             Panel.FocusInput();
         };
+        Panel.ApprovalEnded += () =>
+        {
+            if (_focusMode)
+            {
+                _focusMode = false;
+                Collapse("approval answered");
+            }
+        };
+        Panel.ApprovalOpenAllRequested += () =>
+        {
+            _focusMode = false;
+            ApplyPanelSize();
+            Start(LayoutSize, PillAnimator.SideDuration);
+            _host.Focus();
+            Panel.FocusInput();
+        };
         Panel.CollapseRequested += () => Collapse("collapse button");
         Panel.QuitRequested += Close;
 
@@ -177,6 +196,7 @@ public sealed partial class MainWindow : Window
         WatchNotch(queue);
         WatchSettingsTags(queue);
         Panel.NotchRequested += OnNotchCommand;
+        WatchActivities();
         _awayTimer = queue.CreateTimer();
         _awayTimer.Interval = TimeSpan.FromMilliseconds(50);
         _awayTimer.Tick += (_, _) =>
@@ -374,6 +394,7 @@ public sealed partial class MainWindow : Window
     private void CheckReminders()
     {
         CheckStatusNudge();
+        CheckRules();
         CheckTimesheetPrompts();
         var fired = _tasks.TakePendingNotifications(DateTimeOffset.Now);
         UpdateBadge();
@@ -594,6 +615,30 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // ----- experimental: rule-based nudges (master switch: ExperimentalFeatures). Rules decide when; nothing here uses AI. -----
+
+    private readonly RuleEngine _rules = new(NudgeRules.All, DateTimeOffset.Now);
+
+    private void CheckRules()
+    {
+        // Only while the pill is resting, so a nudge never replaces what you are typing or reading.
+        if (!_settings.Current.ExperimentalFeatures || _machine.State != PillState.Resting)
+        {
+            return;
+        }
+
+        var muted = new HashSet<string>(_settings.Current.MutedNudgeRules, StringComparer.OrdinalIgnoreCase);
+        var nudge = _rules.Evaluate(new NudgeContext(DateTimeOffset.Now, _tasks.Items), muted);
+        if (nudge is null)
+        {
+            return;
+        }
+
+        Log.Info($"Nudge from rule '{nudge.RuleId}': {nudge.Message}");
+        Panel.ShowNudge($"{nudge.Message}  ·  rule: {nudge.RuleName}");
+        ExpandPassively();
+    }
+
     private void CheckStatusNudge()
     {
         if (!_statusNudge.TryFire(DateTimeOffset.Now, _tasks.OpenCount))
@@ -624,7 +669,7 @@ public sealed partial class MainWindow : Window
 
         // A temporary message ("/notch ..." or an agent) takes the notch's place while it lasts; due and open come back after.
         // Nyvora's own progress (an update, a sync) comes first while it lasts, then a message someone set.
-        var note = new[] { _updateNote, _kekaNote, _syncNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
+        var note = new[] { _updateNote, _kekaNote, _syncNote, _activityNote, _notch }.FirstOrDefault(n => n is { } m && m.IsActive(now));
         if (note is not null)
         {
             RestingLabel.Text = note.Text;
@@ -800,6 +845,8 @@ public sealed partial class MainWindow : Window
                 changed = true;
             }
 
+            RefreshActivities(); // experimental: no-op while the master switch is off
+
             if (changed)
             {
                 UpdateBadge();
@@ -807,6 +854,95 @@ public sealed partial class MainWindow : Window
         };
         _notchExpiry.Start();
         UpdateBadge();
+    }
+
+    // ----- experimental: agent activities (master switch: AppSettings.ExperimentalFeatures, default off) -----
+
+    private static readonly string ActivitiesPath = Path.Combine(DataFolders.Active(), ActivityStore.FileName);
+    private NotchMessage? _activityNote;
+    private string _activitySignature = "";
+    private readonly HashSet<string> _approvalsAnnounced = new();
+
+    private void WatchActivities()
+    {
+        Side.SetExperimental(_settings.Current.ExperimentalFeatures);
+        Side.AttachNudgeRules(NudgeRules.All, _settings.Current.MutedNudgeRules, _settings.Save);
+        Side.ExperimentalChanged += on =>
+        {
+            _settings.Current.ExperimentalFeatures = on;
+            _settings.Save();
+            Log.Info("Experimental features " + (on ? "on" : "off"));
+            RefreshActivities();
+        };
+        Panel.ActivityDecided += (id, decision) =>
+        {
+            var error = ActivityStore.Decide(ActivitiesPath, id, decision, DateTimeOffset.Now);
+            if (error is not null)
+            {
+                Log.Info("Activity answer not recorded: " + error);
+            }
+
+            RefreshActivities();
+        };
+        Panel.ActivityRemoved += id =>
+        {
+            ActivityStore.Remove(ActivitiesPath, id, DateTimeOffset.Now);
+            RefreshActivities();
+        };
+        RefreshActivities();
+    }
+
+    /// <summary>
+    /// Reads activities.json (once a second, from the expiry timer) and updates the resting pill and the panel cards.
+    /// With the master switch off it shows nothing and never opens the pill.
+    /// </summary>
+    private void RefreshActivities()
+    {
+        var now = DateTimeOffset.Now;
+        var items = _settings.Current.ExperimentalFeatures ? ActivityStore.Load(ActivitiesPath, now) : Array.Empty<Nyvora.Core.Activities.Activity>();
+        var note = ActivityNotch.For(items, now);
+        var signature = string.Join("|", items.Select(a => $"{a.Id}:{a.Title}:{a.State}:{a.Step}/{a.Steps}:{a.Detail}:{a.Question}:{a.Decision}:{a.Source}"));
+
+        var noteChanged = note?.Text != _activityNote?.Text || note?.Tone != _activityNote?.Tone;
+        _activityNote = note;
+        if (signature != _activitySignature)
+        {
+            _activitySignature = signature;
+            Panel.SetActivities(items);
+        }
+
+        // A new question gets its own card (like a reminder), opening the pill without taking focus. If a reminder card is
+        // showing it waits its turn; if the list is already open the cards in the list show it.
+        var asking = items.Where(a => a.State == ActivityState.WaitingApproval && a.Decision == ApprovalDecision.None
+            && !_approvalsAnnounced.Contains(a.Id + "|" + a.Question)).ToList();
+        if (asking.Count > 0)
+        {
+            if (_machine.State is PillState.Resting or PillState.Collapsing && !Panel.IsFocusing && !Panel.IsAsking)
+            {
+                foreach (var a in asking)
+                {
+                    _approvalsAnnounced.Add(a.Id + "|" + a.Question);
+                }
+
+                Log.Info($"{asking.Count} agent question(s) waiting for approval");
+                _focusMode = true;
+                Panel.ShowApproval(asking.OrderBy(a => a.UpdatedAt).Select(a => a.Id)); // oldest question first
+                ApplyPanelSize();
+                ExpandPassively();
+            }
+            else if (_machine.State == PillState.Expanded && !_focusMode)
+            {
+                foreach (var a in asking)
+                {
+                    _approvalsAnnounced.Add(a.Id + "|" + a.Question); // the list is open: its cards show the question
+                }
+            }
+        }
+
+        if (noteChanged)
+        {
+            UpdateBadge();
+        }
     }
 
     /// <summary>The add box's "/notch" command: text sets the message, nothing clears it.</summary>
@@ -1081,6 +1217,7 @@ public sealed partial class MainWindow : Window
             case PillState.Resting:
                 Panel.ClearNudge();
                 Panel.ClearFocus();
+                Panel.ClearApproval();
                 Panel.ResetView();
                 _focusMode = false;
                 _settingsOpen = false;

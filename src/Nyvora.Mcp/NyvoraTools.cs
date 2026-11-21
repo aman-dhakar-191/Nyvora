@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Nyvora.Core.Activities;
 using Nyvora.Core.Settings;
 using Nyvora.Core.Tasks;
 
@@ -31,11 +32,22 @@ public sealed class NyvoraTools
         public bool TagsChanged { get; set; }
     }
 
-    private sealed record Tool(string Name, string Description, ToolAccess Access, JsonObject Schema, Func<JsonObject, State, DateTimeOffset, string> Run);
+    private sealed record Tool(string Name, string Description, ToolAccess Access, JsonObject Schema, Func<JsonObject, State, DateTimeOffset, string> Run)
+    {
+        /// <summary>Only offered (and only runnable) while "Experimental features" is on in Nyvora's settings.</summary>
+        public bool Experimental { get; init; }
+
+        /// <summary>Runs without holding the task-file lock (it may wait for a while, and must not block the app's saves). It only reads.</summary>
+        public bool Unlocked { get; init; }
+    }
+
+    /// <summary>Longest a single wait_for_decision call blocks: under the minute most MCP clients give a tool call.</summary>
+    public const int MaxWaitSeconds = 50;
 
     private readonly string _tasksPath;
     private readonly string _settingsPath;
     private readonly string _notchPath;
+    private readonly string _activitiesPath;
     private readonly bool _allowWrite;
     private readonly bool _allowDelete;
     private readonly Func<DateTimeOffset> _clock;
@@ -46,6 +58,7 @@ public sealed class NyvoraTools
         _tasksPath = Path.Combine(dataDir, "tasks.json");
         _settingsPath = Path.Combine(dataDir, "settings.json");
         _notchPath = Path.Combine(dataDir, NotchMessageStore.FileName);
+        _activitiesPath = Path.Combine(dataDir, ActivityStore.FileName);
         _allowDelete = allowDelete;
         _allowWrite = allowWrite || allowDelete;
         _clock = clock ?? (() => DateTimeOffset.Now);
@@ -61,10 +74,14 @@ public sealed class NyvoraTools
         _ => _allowDelete,
     };
 
+    /// <summary>The master flag, read fresh from settings.json so turning it on or off in the app takes effect without restarting this server.</summary>
+    private bool ExperimentalOn() => AppSettings.TryRead(_settingsPath, out var s) && s.ExperimentalFeatures;
+
     public JsonArray List()
     {
         var arr = new JsonArray();
-        foreach (var t in _tools.Where(Allowed))
+        var experimental = ExperimentalOn();
+        foreach (var t in _tools.Where(t => Allowed(t) && (!t.Experimental || experimental)))
         {
             var def = new JsonObject
             {
@@ -98,8 +115,18 @@ public sealed class NyvoraTools
             return new ToolResult($"'{name}' is disabled. The user must start nyvora-mcp with {flag} to allow it.", true);
         }
 
+        if (tool.Experimental && !ExperimentalOn())
+        {
+            return new ToolResult($"'{name}' is an experimental feature. The user must turn on Experimental features in Nyvora's settings.", true);
+        }
+
         try
         {
+            if (tool.Unlocked)
+            {
+                return new ToolResult(tool.Run(args, Load(), _clock()), false);
+            }
+
             var now = _clock();
             using var gate = TaskFileLock.Acquire(_tasksPath, TimeSpan.FromSeconds(5));
             if (!gate.Acquired)
@@ -208,6 +235,89 @@ public sealed class NyvoraTools
                 NotchMessageStore.Clear(_notchPath);
                 return Json(new JsonObject { ["message"] = null });
             }),
+        new Tool("list_activities", "List the activities agents have published to Nyvora's pill (experimental), with any answer the user gave to an approval question.", ToolAccess.Read, Schema(),
+            (_, _, now) => Json(new JsonObject { ["activities"] = new JsonArray(ActivityStore.Load(_activitiesPath, now).Select(a => (JsonNode)DescribeActivity(a)).ToArray()) }))
+        { Experimental = true },
+        new Tool("publish_activity",
+            $"Show or update a named activity on Nyvora's pill (experimental), for example 'Deploying v2, step 2 of 4'. Use a stable id to update the same activity. Fields you leave out keep their value. Set state to waiting_approval with a question to ask the user to approve something, then call wait_for_decision with the same id: it waits for the answer, so you do not need to be told to check. Finished activities disappear by themselves after {(int)Activity.FinishedTtl.TotalMinutes} minutes; an activity not updated for {(int)Activity.ActiveTtl.TotalMinutes} hour is treated as abandoned.",
+            ToolAccess.Write,
+            Schema(("id", Str($"Stable id, up to {Activity.MaxId} letters, digits, dots, dashes or underscores")),
+                ("title", Str($"Short name, up to {Activity.MaxTitle} characters; required when it starts")),
+                ("state", Str("running (default), waiting_approval, done or failed")),
+                ("step", Int("Optional: current step number")),
+                ("steps", Int("Optional: total number of steps")),
+                ("detail", Str($"Optional: one line of detail, up to {Activity.MaxDetail} characters")),
+                ("question", Str($"What to approve, up to {Activity.MaxQuestion} characters; required with waiting_approval")),
+                ("source", Str($"Optional: who you are, up to {Activity.MaxSource} characters"))).Require("id"),
+            (a, _, now) =>
+            {
+                var error = ActivityStore.Upsert(_activitiesPath, new ActivityUpdate(
+                    RequireStr(a, "id"), OptionalStr(a, "title"), OptionalStr(a, "state"),
+                    OptionalInt(a, "step"), OptionalInt(a, "steps"),
+                    OptionalStr(a, "detail"), OptionalStr(a, "question"), OptionalStr(a, "source")), now, out var activity);
+                if (error is not null)
+                {
+                    throw new ToolError(error);
+                }
+
+                var node = DescribeActivity(activity!);
+                if (activity!.State == ActivityState.WaitingApproval && activity.Decision == ApprovalDecision.None)
+                {
+                    node["next"] = "The user has been asked. Call wait_for_decision with this id to wait for the answer, and do not continue the guarded step until it says approved.";
+                }
+
+                return Json(node);
+            })
+        { Experimental = true },
+        new Tool("wait_for_decision",
+            $"Wait for the user's answer to a waiting_approval activity (experimental). Returns as soon as they approve or dismiss, or after up to {MaxWaitSeconds} seconds (default 30) with timedOut=true: call it again to keep waiting. Use it right after publish_activity with a question; do not carry on with the guarded step until the decision is approved.",
+            ToolAccess.Read,
+            Schema(("id", Str("The activity id you published")),
+                ("seconds", Int($"Optional: how long to wait, 0 to {MaxWaitSeconds} (default 30); 0 just checks once"))).Require("id"),
+            (a, _, _) =>
+            {
+                var id = RequireStr(a, "id");
+                var wait = TimeSpan.FromSeconds(Math.Clamp(OptionalInt(a, "seconds") ?? 30, 0, MaxWaitSeconds));
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                while (true)
+                {
+                    var current = ActivityStore.Load(_activitiesPath, _clock()).FirstOrDefault(x => x.Id == id)
+                        ?? throw new ToolError("There is no activity with that id (it may have expired or been removed).");
+                    if (current.State != ActivityState.WaitingApproval)
+                    {
+                        var info = DescribeActivity(current);
+                        info["timedOut"] = false;
+                        info["note"] = "This activity is not waiting for an answer.";
+                        return Json(info);
+                    }
+
+                    var answered = current.Decision != ApprovalDecision.None;
+                    if (answered || timer.Elapsed >= wait)
+                    {
+                        var info = DescribeActivity(current);
+                        info["timedOut"] = !answered;
+                        if (!answered)
+                        {
+                            info["next"] = "No answer yet. Call wait_for_decision again to keep waiting.";
+                        }
+
+                        return Json(info);
+                    }
+
+                    Thread.Sleep(250);
+                }
+            })
+        { Experimental = true, Unlocked = true },
+        new Tool("clear_activity", "Remove one of your activities from Nyvora's pill (experimental), for example when your work ends.", ToolAccess.Write,
+            Schema(("id", Str("The activity id"))).Require("id"),
+            (a, _, now) =>
+            {
+                var id = RequireStr(a, "id");
+                return ActivityStore.Remove(_activitiesPath, id, now)
+                    ? Json(new JsonObject { ["cleared"] = id })
+                    : throw new ToolError("There is no activity with that id.");
+            })
+        { Experimental = true },
         new Tool("add_task", "Add a task. Optionally give a reminder time and a priority.", ToolAccess.Write,
             Schema(("title", Str("Task title, up to 200 characters")),
                 ("remindAt", Str("Optional reminder as ISO 8601, e.g. 2026-10-30T09:00:00+05:30; local time if no offset")),
@@ -380,6 +490,34 @@ public sealed class NyvoraTools
     };
 
     private static string Json(JsonObject o) => o.ToJsonString();
+
+    private static JsonObject DescribeActivity(Activity a) => new()
+    {
+        ["id"] = a.Id,
+        ["title"] = a.Title,
+        ["state"] = a.State switch
+        {
+            ActivityState.WaitingApproval => "waiting_approval",
+            ActivityState.Done => "done",
+            ActivityState.Failed => "failed",
+            _ => "running",
+        },
+        ["step"] = a.Step,
+        ["steps"] = a.Steps,
+        ["detail"] = a.Detail,
+        ["question"] = a.Question.Length == 0 ? null : a.Question,
+        ["decision"] = a.Decision switch
+        {
+            ApprovalDecision.Approved => "approved",
+            ApprovalDecision.Dismissed => "dismissed",
+            _ => "none",
+        },
+        ["source"] = a.Source,
+        ["updatedAt"] = a.UpdatedAt.ToString("o", CultureInfo.InvariantCulture),
+    };
+
+    private static int? OptionalInt(JsonObject a, string key) =>
+        a[key] is JsonNode n && n.GetValueKind() == System.Text.Json.JsonValueKind.Number ? (int)n : null;
 
     private static TagDef? FindTag(State s, string name) =>
         s.Tasks.Tags.Items.FirstOrDefault(x => string.Equals(x.Name, name.Trim().TrimStart('#').Trim(), StringComparison.OrdinalIgnoreCase));
