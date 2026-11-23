@@ -164,10 +164,114 @@ def changed(page, log, args, why):
     except Exception:
         pass
     log(why)
+    try:
+        menu = page.locator("bs-dropdown-container")
+        if menu.count() and menu.first.is_visible():
+            log("Open list says: " + " / ".join(menu.first.inner_text().split())[:400])
+            log("Open list html: " + menu.first.evaluate("e => e.outerHTML")[:1500])
+    except Exception:
+        pass
     log("Things on the page:")
     for line in inventory(page):
         log("   " + line)
     return finish(CHANGED, log, f"Screenshot: {shot}")
+
+
+def visible_boxes(loc, limit=20):
+    """Visible matches of a locator with their boxes, in page order."""
+    out = []
+    for i in range(min(loc.count(), limit)):
+        el = loc.nth(i)
+        try:
+            if el.is_visible():
+                box = el.bounding_box()
+                if box:
+                    out.append((el, box))
+        except Exception:
+            continue
+    return out
+
+
+def press(page, el, box):
+    """Click an element; if another element sits on top of it (Keka's dropdown rows do), click its spot with the mouse."""
+    try:
+        el.click(timeout=3000)
+    except Exception:
+        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+
+
+def open_add_menu(page, label, log):
+    """Click 'Add Time Entry' and wait for the list. Tries the text, then its button, then a plain mouse click."""
+    menu = page.locator("bs-dropdown-container")
+    spots = visible_boxes(page.get_by_text(label, exact=False))
+    if not spots:
+        return None
+    el, box = spots[0]
+    attempts = [
+        lambda: el.click(timeout=3000),
+        lambda: el.locator("xpath=ancestor-or-self::*[self::button or @role='button' or contains(@class,'btn')][1]").click(timeout=3000),
+        lambda: page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2),
+    ]
+    for n, go in enumerate(attempts, 1):
+        try:
+            go()
+            menu.first.wait_for(state="visible", timeout=4000)
+            return menu.first
+        except Exception:
+            log(f"'{label}' click way {n} did not open the list")
+    return None
+
+
+def pick(page, menu, text, exact):
+    """Choose `text` in the opened list: the row's title element first, then any visible text match."""
+    for loc in (menu.locator(f'[title="{text}"]'), menu.get_by_text(text, exact=exact)):
+        spots = visible_boxes(loc)
+        if spots:
+            press(page, *spots[0])
+            return True
+    return False
+
+
+def add_row(page, project, item, fields, log):
+    """Add the project / work item row. Returns a reason string when a step failed, else None."""
+    menu = open_add_menu(page, fields["add_entry"], log)
+    if menu is None:
+        return f"'{fields['add_entry']}' did not open a list."
+    search = menu.get_by_placeholder(fields["project_search_placeholder"], exact=True).first
+    if search.count() == 0:  # the box may carry no placeholder: take the first visible text box in the list
+        search = menu.locator("input:visible").first
+    try:
+        search.wait_for(state="visible", timeout=8000)
+    except Exception:
+        return "The list opened but has no search box."
+    search.fill(project)
+    time.sleep(1)
+    if not pick(page, menu, project, exact=True):
+        return f"'{project}' is not in the list."
+    time.sleep(1)
+    if not pick(page, menu, item, exact=False):
+        return f"'{item}' is not in the list under '{project}'."
+    return None
+
+
+def confirm_in_menu(page, fields, log):
+    """If the list is still open after choosing the work item, press its Add/Done/Apply button (never a never-click one)."""
+    menu = page.locator("bs-dropdown-container")
+    try:
+        if not menu.first.is_visible():
+            return
+    except Exception:
+        return
+    blocked = [n.lower() for n in fields["never_click"]]
+    for el, _ in visible_boxes(menu.first.get_by_role("button")):
+        name = (el.inner_text() or "").strip()
+        if re.fullmatch(r"(add|done|apply|ok|select)", name, re.I) and name.lower() not in blocked:
+            log(f"The list stayed open; pressing '{name}' in it")
+            try:
+                el.click(timeout=3000)
+            except Exception:
+                pass
+            return
 
 
 def fill_day(page, entry, fields, args, log, headless=False):
@@ -193,21 +297,16 @@ def fill_day(page, entry, fields, args, log, headless=False):
         return changed(page, log, args, f"The hidden run could not see the '{item}' row; a window will try next.")
     if row is None:
         log(f"No '{item}' row this week; adding it")
-        page.get_by_text(fields["add_entry"], exact=False).first.click()
-        menu = page.locator("bs-dropdown-container")  # only look inside the opened list, never the grid behind it
-        menu.first.wait_for(state="visible", timeout=8000)
-        search = menu.first.get_by_placeholder(fields["project_search_placeholder"], exact=True).first
-        search.wait_for(state="visible", timeout=8000)
-        search.fill(project)
-        time.sleep(1)
-        menu.first.get_by_text(project, exact=True).first.click()
-        time.sleep(1)
-        menu.first.get_by_text(item, exact=False).first.click()
-        for _ in range(20):
+        why = add_row(page, project, item, fields, log)
+        if why:
+            return changed(page, log, args, why)
+        for n in range(20):
             time.sleep(0.5)
             row = work_item_row(page, item, below)
             if row:
                 break
+            if n == 5:
+                confirm_in_menu(page, fields, log)
         if row is None:
             return changed(page, log, args, f"Chose '{project}' / '{item}' but no row appeared.")
     header = day_header(page, date) or header  # the grid may have shifted
